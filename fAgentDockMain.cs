@@ -40,6 +40,9 @@ namespace AgentDockStandalone {
         public fAgentDockMain(int aintInitialSpawn, bool ablnInitialAbsorb,
                               string astrBatPath, string astrCwd) {
             InitializeComponent();
+            // The window and taskbar show the exe's own icon (AgentDock.ico, the Leonardo menu's
+            // Agent Dock robot), so the icon lives in one place: the build (Story 6817).
+            try { this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             mintInitialSpawn   = aintInitialSpawn;
             mblnInitialAbsorb  = ablnInitialAbsorb;
             mstrBatPath        = astrBatPath;
