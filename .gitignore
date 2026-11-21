@@ -1,0 +1,7 @@
+# Agent Dock (Story 6817)
+
+# Build output
+bin/
+obj/
+*.user
+.vs/

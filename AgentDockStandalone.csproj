@@ -1,0 +1,72 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="3.5">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>9.0.21022</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{B7D27FA1-2C18-4A02-9E9E-3F3E4F2C2A11}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>AgentDockStandalone</RootNamespace>
+    <AssemblyName>AgentDockStandalone</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <StartupObject>AgentDockStandalone.Program</StartupObject>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="fAgentDockMain.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="fAgentDockMain.Designer.cs">
+      <DependentUpon>fAgentDockMain.cs</DependentUpon>
+    </Compile>
+    <Compile Include="fAgentTerminal.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="fAgentTerminal.Designer.cs">
+      <DependentUpon>fAgentTerminal.cs</DependentUpon>
+    </Compile>
+    <Compile Include="fAgentAbsorbedTerminal.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="fAgentAbsorbedTerminal.Designer.cs">
+      <DependentUpon>fAgentAbsorbedTerminal.cs</DependentUpon>
+    </Compile>
+    <Compile Include="fHelpViewer.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="cPaneArranger.cs" />
+    <Compile Include="cTabColor.cs" />
+    <Compile Include="cAdminSwap.cs" />
+    <Compile Include="cPaneLauncher.cs" />
+    <Compile Include="Win32.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.manifest" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
