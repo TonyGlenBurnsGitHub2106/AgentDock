@@ -19,11 +19,16 @@ those windows inside itself so you can arrange, maximize, color and pop them out
 
 ## Building it
 
-Open `AgentDockStandalone.csproj` in Visual Studio, or run MSBuild:
+No Visual Studio needed. Double-click `build.cmd` (or run it in a command prompt). It uses
+the C# compiler that ships inside Windows and writes `bin\AgentDockStandalone.exe`.
 
-    MSBuild.exe AgentDockStandalone.csproj -p:Configuration=Release
+With Visual Studio you can instead open `AgentDockStandalone.csproj`, or run
+`MSBuild.exe AgentDockStandalone.csproj -p:Configuration=Release` (output in `bin\Release\`).
 
-The program lands in `bin\Release\`.
+## A pane batch file
+
+Each pane runs one batch file. `samples\Copilot.bat` starts GitHub Copilot CLI in your
+profile folder. Copy it, change the folder, and pass it with `--bat`.
 
 ## Status
 

@@ -4,9 +4,11 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Story 5764: the dock always starts as administrator so admin panes dock inside it.
-             Normal panes still start with normal rights (cPaneLauncher launches them through Explorer). -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <!-- Story 5764: the dock starts as administrator when it can, so admin panes dock inside it.
+             Normal panes still start with normal rights (cPaneLauncher launches them through Explorer).
+             Story 6817: highestAvailable, not requireAdministrator, so a machine where the user has
+             no admin rights (a work machine) still runs the dock, without admin panes. -->
+        <requestedExecutionLevel level="highestAvailable" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>

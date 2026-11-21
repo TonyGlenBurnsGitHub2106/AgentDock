@@ -174,7 +174,9 @@ namespace AgentDockStandalone {
                     Left  = info.srWindow.Left,
                     Right = info.srWindow.Right,
                 };
-                Win32.SetConsoleWindowInfo(hOut, bAbsolute: true, ref rect);
+                // Plain positional argument so Windows' own C# 5 compiler (csc.exe in the .NET
+                // Framework folder) builds this on a machine with no Visual Studio (Story 6817).
+                Win32.SetConsoleWindowInfo(hOut, true, ref rect);
             } catch { }
             finally {
                 if (attached) Win32.FreeConsole();
