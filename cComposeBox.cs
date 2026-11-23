@@ -22,10 +22,13 @@ namespace AgentDockStandalone {
 
         private readonly TextBox txtPrompt = new TextBox();
         private readonly Button  btnSend   = new Button();
-        private readonly Label   lblTarget = new Label();
+        private readonly Label    lblTarget = new Label();
+        private readonly ComboBox cboTarget = new ComboBox();
         private readonly Timer   tmrTarget = new Timer();
 
         private readonly Func<fAgentAbsorbedTerminal> mfncTarget;
+        private readonly Func<List<Form>>             mfncPanes;
+        private readonly Action<Form>                 mactSetTarget;
         private readonly Action<string>               mactStatus;
 
         private readonly List<string> mlstHistory = new List<string>();
@@ -34,9 +37,14 @@ namespace AgentDockStandalone {
         private bool   mblnSending;
 
         // afncTarget: the pane a prompt goes to (the one last clicked), or null when there is none.
-        public cComposeBox(Func<fAgentAbsorbedTerminal> afncTarget, Action<string> aactStatus) {
-            mfncTarget = afncTarget;
-            mactStatus = aactStatus;
+        // afncPanes: the panes in order, for the Send to list. aactSetTarget: makes a pane the
+        // target, the same as clicking inside it.
+        public cComposeBox(Func<fAgentAbsorbedTerminal> afncTarget, Func<List<Form>> afncPanes,
+                           Action<Form> aactSetTarget, Action<string> aactStatus) {
+            mfncTarget    = afncTarget;
+            mfncPanes     = afncPanes;
+            mactSetTarget = aactSetTarget;
+            mactStatus    = aactStatus;
             BuildLayout();
         }
 
@@ -56,11 +64,26 @@ namespace AgentDockStandalone {
             btnSend.Height = 30;
             btnSend.Click += delegate { Send(); txtPrompt.Focus(); };
 
-            lblTarget.Dock         = DockStyle.Fill;
-            lblTarget.AutoEllipsis = true;
-            lblTarget.ForeColor    = SystemColors.GrayText;
-            lblTarget.Padding      = new Padding(0, 4, 0, 0);
+            // Send to: the pane a prompt goes to. It follows the pane you click in, and picking
+            // one here does the same as clicking in it.
+            lblTarget.Text      = "Send to:";
+            lblTarget.Dock      = DockStyle.Top;
+            lblTarget.Height    = 20;
+            lblTarget.ForeColor = SystemColors.GrayText;
+            lblTarget.TextAlign = ContentAlignment.BottomLeft;
 
+            cboTarget.Dock          = DockStyle.Top;
+            cboTarget.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboTarget.DropDownWidth = 360;
+            // Any change the box did not make itself is the user's pick (mouse or keyboard).
+            cboTarget.SelectedIndexChanged += delegate {
+                if (mblnSyncing) return;
+                TargetItem item = cboTarget.SelectedItem as TargetItem;
+                if (item != null) mactSetTarget(item.Pane);
+            };
+            cboTarget.DropDownClosed += delegate { txtPrompt.Focus(); };
+
+            pnlRight.Controls.Add(cboTarget);
             pnlRight.Controls.Add(lblTarget);
             pnlRight.Controls.Add(btnSend);
 
@@ -91,12 +114,42 @@ namespace AgentDockStandalone {
             if (this.Visible) txtPrompt.Focus();
         }
 
+        // One entry in the Send to list: the pane's number and title.
+        private sealed class TargetItem {
+            public readonly Form   Pane;
+            public readonly string Caption;
+            public TargetItem(Form afrm, int aintNumber) { Pane = afrm; Caption = aintNumber + ". " + afrm.Text; }
+            public override string ToString() { return Caption; }
+        }
+
+        // Keeps the Send to list in step with the panes and the current pane. Left alone while it
+        // is open, so it never changes under the mouse.
+        private bool mblnSyncing;
+
         private void ShowTarget() {
-            fAgentAbsorbedTerminal pane = mfncTarget();
-            string strText = pane == null
-                ? "Click inside a pane to choose where prompts go."
-                : "Sends to: " + pane.Text;
-            if (lblTarget.Text != strText) lblTarget.Text = strText;
+            if (cboTarget.DroppedDown) return;
+            mblnSyncing = true;
+            try { SyncTargetList(); } finally { mblnSyncing = false; }
+        }
+
+        private void SyncTargetList() {
+            List<Form> lstPanes = mfncPanes();
+            bool blnSame = cboTarget.Items.Count == lstPanes.Count;
+            for (int i = 0; blnSame && i < lstPanes.Count; i++) {
+                TargetItem it = (TargetItem)cboTarget.Items[i];
+                blnSame = it.Pane == lstPanes[i] && it.Caption == (i + 1) + ". " + lstPanes[i].Text;
+            }
+            if (!blnSame) {
+                cboTarget.BeginUpdate();
+                cboTarget.Items.Clear();
+                for (int i = 0; i < lstPanes.Count; i++) cboTarget.Items.Add(new TargetItem(lstPanes[i], i + 1));
+                cboTarget.EndUpdate();
+            }
+            Form current = mfncTarget();
+            int intAt = -1;
+            for (int i = 0; i < cboTarget.Items.Count; i++)
+                if (((TargetItem)cboTarget.Items[i]).Pane == current) intAt = i;
+            if (cboTarget.SelectedIndex != intAt) cboTarget.SelectedIndex = intAt;
         }
 
         private void Prompt_KeyDown(object sender, KeyEventArgs e) {
@@ -155,7 +208,7 @@ namespace AgentDockStandalone {
             if (strText.Trim().Length == 0) return;
             fAgentAbsorbedTerminal pane = mfncTarget();
             if (pane == null) {
-                mactStatus("Click inside a pane first, so the compose box knows where to send.");
+                mactStatus("Pick a pane in Send to (or click inside one) first.");
                 return;
             }
             IntPtr hwnd = pane.AbsorbedHwnd;

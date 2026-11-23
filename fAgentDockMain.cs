@@ -74,7 +74,10 @@ namespace AgentDockStandalone {
         private cComposeBox mCompose;
 
         private void AddComposeBox() {
-            mCompose = new cComposeBox(ComposeTarget, delegate(string s) { this.tslStatus.Text = s; });
+            mCompose = new cComposeBox(ComposeTarget,
+                delegate { return mPanes == null ? new List<Form>() : mPanes.OrderedPanes(); },
+                delegate(Form f) { if (mPanes != null) mPanes.SetCurrentPane(f); },
+                delegate(string s) { this.tslStatus.Text = s; });
             this.Controls.Add(mCompose);
             // Docking runs from the back of the z-order to the front: the menu and status bar stay
             // outermost, then the compose box, and the pane area fills what is left.
@@ -98,6 +101,7 @@ namespace AgentDockStandalone {
         protected override void OnLoad(EventArgs e) {
             base.OnLoad(e);
             InstallMouseHook();
+            InstallFocusHook();
             mPanes.InstallKeyboardHook();
             // Ctrl+Shift+U works while a terminal has the keyboard (the arranger's hook).
             mPanes.AddChord(Keys.U, delegate { UnparentActivePane(); });
@@ -152,7 +156,40 @@ namespace AgentDockStandalone {
                 Win32.UnhookWindowsHookEx(mMouseHookId);
                 mMouseHookId = IntPtr.Zero;
             }
+            if (mFocusHookId != IntPtr.Zero) {
+                UnhookWinEvent(mFocusHookId);
+                mFocusHookId = IntPtr.Zero;
+            }
         }
+
+        // A second way to know which pane you are in (Story 6826): Windows reports every change of
+        // keyboard focus, and a focus landing inside a pane makes it the current pane. Unlike the
+        // low-level mouse hook, Windows never drops this one, and it also follows keyboard moves.
+        private WinEventProc mFocusHookProc;
+        private IntPtr       mFocusHookId = IntPtr.Zero;
+
+        private void InstallFocusHook() {
+            mFocusHookProc = new WinEventProc(FocusHookCallback);
+            mFocusHookId = SetWinEventHook(EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS, IntPtr.Zero,
+                mFocusHookProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+        }
+
+        private void FocusHookCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd,
+                                       int idObject, int idChild, uint idEventThread, uint dwmsEventTime) {
+            try {
+                if (hwnd != IntPtr.Zero && mPanes != null) mPanes.NoteClick(hwnd);
+            } catch { /* a hook must never throw */ }
+        }
+
+        private delegate void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd,
+                                           int idObject, int idChild, uint idEventThread, uint dwmsEventTime);
+        private const uint EVENT_OBJECT_FOCUS    = 0x8005;
+        private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc,
+            WinEventProc lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+        [DllImport("user32.dll")]
+        private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
 
         private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam) {
             try {
@@ -166,7 +203,11 @@ namespace AgentDockStandalone {
                         mPanes.NoteClick(clicked);
                         IntPtr root = Win32.GetAncestor(clicked, Win32.GA_ROOT);
                         if (root == this.Handle && Win32.GetForegroundWindow() != this.Handle) {
-                            BringSelfForward();
+                            // Never inside the hook (Story 6826): BringSelfForward attaches to the
+                            // terminal's input thread, which can take long enough that Windows
+                            // silently removes a slow low-level hook. After that no click was seen,
+                            // and "the pane last clicked" stuck on one pane. Post it instead.
+                            this.BeginInvoke(new MethodInvoker(BringSelfForward));
                         }
                     }
                 }

@@ -120,6 +120,11 @@ namespace AgentDockShared {
         private readonly Dictionary<int, Action> mdicCtrlChords = new Dictionary<int, Action>();
         private readonly Dictionary<int, Action> mdicBareKeys   = new Dictionary<int, Action>();
 
+        // Makes a pane the current one, as if it had been clicked (the compose box's Send to list).
+        public void SetCurrentPane(Form afrm) {
+            if (afrm != null && OrderedPanes().Contains(afrm)) mfrmLastClicked = afrm;
+        }
+
         // Called from the dock's low-level mouse hook with the HWND under the click.
         public void NoteClick(IntPtr ahwndClicked) {
             if (ahwndClicked == IntPtr.Zero) return;
