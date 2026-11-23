@@ -56,6 +56,7 @@ namespace AgentDockStandalone {
                               string astrBatPath, string astrCwd) {
             InitializeComponent();
             LoadDockIcon();
+            AddCloseActivePaneMenuItem();
             mintInitialSpawn   = aintInitialSpawn;
             mblnInitialAbsorb  = ablnInitialAbsorb;
             mstrBatPath        = astrBatPath;
@@ -556,6 +557,40 @@ namespace AgentDockStandalone {
                 return;
             }
             abs.UndockToDesktop();
+        }
+
+        // Agents -> Close Active Pane (Story 6817). With pane title bars hidden there is no X on
+        // a pane, so this closes the pane you last clicked, after asking. A pane the dock started
+        // ends its agent session; an absorbed one goes back to the desktop, as the X did.
+        private ToolStripMenuItem mnuAgentsCloseActive;
+
+        private void AddCloseActivePaneMenuItem() {
+            mnuAgentsCloseActive = new ToolStripMenuItem("&Close Active Pane");
+            mnuAgentsCloseActive.ToolTipText = "Close the pane you last clicked. A pane the dock started ends its session.";
+            mnuAgentsCloseActive.Click += delegate { CloseActivePane(); };
+            int intAt = mnuAgents.DropDownItems.IndexOf(mnuAgentsUnparentActive);
+            mnuAgents.DropDownItems.Insert(intAt + 1, mnuAgentsCloseActive);
+        }
+
+        private void CloseActivePane() {
+            Form pane = mPanes.CurrentPane();
+            if (pane == null && this.MdiChildren != null && this.MdiChildren.Length == 1)
+                pane = this.MdiChildren[0];
+            if (pane == null) {
+                this.tslStatus.Text = (this.MdiChildren == null || this.MdiChildren.Length == 0)
+                    ? "No pane to close."
+                    : "Click inside a pane first, then close it.";
+                return;
+            }
+            fAgentAbsorbedTerminal abs = pane as fAgentAbsorbedTerminal;
+            bool blnEnds = abs == null || abs.IsOwnedSpawn;
+            DialogResult dr = MessageBox.Show(this,
+                "Close pane: " + pane.Text + "?\r\n\r\n"
+                + (blnEnds ? "Its agent session ends. This cannot be undone."
+                           : "The terminal goes back to the desktop, still running."),
+                "Agent Dock", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+            if (dr == DialogResult.Yes) pane.Close();
         }
 
         private void mnuAgentsCloseAndTerminate_Click(object sender, EventArgs e) {

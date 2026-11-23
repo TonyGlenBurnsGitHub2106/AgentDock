@@ -45,6 +45,12 @@ namespace AgentDockStandalone {
             if (ablnAdmin && !strTitle.StartsWith("[ADMIN]"))
                 strTitle = "[ADMIN] " + strTitle;
             this.Text = strTitle;
+            // config\agentdock.ini HidePaneTitleBars (default true, Story 6817): no title bar on
+            // the pane, so the terminal gets that row. Close / Undock live on the Agents menu.
+            if (cDockSettings.HidePaneTitleBars) {
+                this.FormBorderStyle = FormBorderStyle.None;
+                this.ControlBox      = false;
+            }
         }
 
         public IntPtr AbsorbedHwnd  { get { return mhwndAbsorbed; } }

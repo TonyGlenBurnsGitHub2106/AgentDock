@@ -63,6 +63,7 @@
     <Compile Include="cPaneArranger.cs" />
     <Compile Include="cTabColor.cs" />
     <Compile Include="cAdminSwap.cs" />
+    <Compile Include="cDockSettings.cs" />
     <Compile Include="cPaneLauncher.cs" />
     <Compile Include="Win32.cs" />
   </ItemGroup>

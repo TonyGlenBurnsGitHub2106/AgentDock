@@ -23,6 +23,8 @@ namespace AgentDockStandalone {
             int    intSpawn  = 0;
             bool   blnAbsorb = false;
             string strBat    = DefaultBatPath();
+            string strRoot   = FindRepoRoot();
+            cDockSettings.Load(Path.Combine(strRoot ?? (ExeDir() ?? ""), CNST_CONFIG_FOLDER));
             string strCwd    = DefaultCwd();
 
             for (int i = 0; i < args.Length; i++) {

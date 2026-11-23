@@ -32,6 +32,13 @@ machine and is never committed. On the first run the dock copies `samples\Copilo
 there, which starts GitHub Copilot CLI in your profile folder. Edit `config\pane.bat` to
 change the folder or run a different agent. `--bat <file>` on the command line overrides it.
 
+`config\agentdock.ini` holds the dock's settings, written with their defaults on the first
+run. Each one has a comment saying what it does. Restart the dock after a change.
+
+- `HidePaneTitleBars = true` (the default): panes have no title bar, so the terminal gets
+  one more row. Close a pane with Agents -> Close Active Pane, and pop one out with
+  Agents -> Unparent Active Pane. Set it to `false` to bring the title bars back.
+
 ## Status
 
 This is the starting copy of the dock, taken as is. The next steps are to turn the
