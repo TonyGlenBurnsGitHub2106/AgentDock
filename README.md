@@ -51,9 +51,8 @@ run. Each one has a comment saying what it does. Restart the dock after a change
 
 ## Status
 
-This is the starting copy of the dock, taken as is. The next steps are to turn the
-defaults for this one machine into settings, add profiles so any terminal agent can run
-in a pane, and publish a ready-built release.
+Works with any terminal agent through Settings. Still to come: profiles (several agents,
+each new pane picks one) and a ready-built release to download.
 
 ## Help and version
 

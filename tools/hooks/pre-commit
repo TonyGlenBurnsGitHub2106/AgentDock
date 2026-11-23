@@ -4,6 +4,8 @@
 # Turned on per clone with:  git config core.hooksPath tools/hooks   (tools\install-hooks.cmd)
 f="$(git rev-parse --show-toplevel)/AssemblyInfo.cs"
 [ -f "$f" ] || exit 0
+# Nothing staged (or only the version file itself): no commit is coming, so no raise.
+if git diff --cached --quiet -- . ":(exclude)AssemblyInfo.cs"; then exit 0; fi
 n=$(sed -n 's/.*AssemblyVersion("[0-9]*\.[0-9]*\.\([0-9]*\)").*/\1/p' "$f")
 case "$n" in
   ''|*[!0-9]*) echo "pre-commit: no version found in AssemblyInfo.cs, not raised." >&2; exit 0 ;;
