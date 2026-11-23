@@ -133,25 +133,25 @@ namespace AgentDockStandalone {
             this.mnuAgentsSpawn1.Name         = "mnuAgentsSpawn1";
             this.mnuAgentsSpawn1.Size         = new System.Drawing.Size(260, 22);
             this.mnuAgentsSpawn1.Text         = "Spawn &1 Pane";
-            this.mnuAgentsSpawn1.ToolTipText  = "Open one new Claude Code pane via cmd /k claude.";
+            this.mnuAgentsSpawn1.ToolTipText  = "Bring the dock up to one pane.";
             this.mnuAgentsSpawn1.Click       += new System.EventHandler(this.mnuAgentsSpawn1_Click);
 
             this.mnuAgentsSpawn2.Name         = "mnuAgentsSpawn2";
             this.mnuAgentsSpawn2.Size         = new System.Drawing.Size(260, 22);
             this.mnuAgentsSpawn2.Text         = "Spawn &2 Panes";
-            this.mnuAgentsSpawn2.ToolTipText  = "Open two new Claude Code panes (side by side).";
+            this.mnuAgentsSpawn2.ToolTipText  = "Bring the dock up to two panes (side by side).";
             this.mnuAgentsSpawn2.Click       += new System.EventHandler(this.mnuAgentsSpawn2_Click);
 
             this.mnuAgentsSpawn3.Name         = "mnuAgentsSpawn3";
             this.mnuAgentsSpawn3.Size         = new System.Drawing.Size(260, 22);
             this.mnuAgentsSpawn3.Text         = "Spawn &3 Panes";
-            this.mnuAgentsSpawn3.ToolTipText  = "Open three new Claude Code panes.";
+            this.mnuAgentsSpawn3.ToolTipText  = "Bring the dock up to three panes.";
             this.mnuAgentsSpawn3.Click       += new System.EventHandler(this.mnuAgentsSpawn3_Click);
 
             this.mnuAgentsSpawn4.Name         = "mnuAgentsSpawn4";
             this.mnuAgentsSpawn4.Size         = new System.Drawing.Size(260, 22);
             this.mnuAgentsSpawn4.Text         = "Spawn &4 Panes";
-            this.mnuAgentsSpawn4.ToolTipText  = "Open four new Claude Code panes (quadrant default).";
+            this.mnuAgentsSpawn4.ToolTipText  = "Bring the dock up to four panes (a 2 x 2 grid).";
             this.mnuAgentsSpawn4.Click       += new System.EventHandler(this.mnuAgentsSpawn4_Click);
 
             this.mnuAgentsNewPane.Name         = "mnuAgentsNewPane";
@@ -182,7 +182,7 @@ namespace AgentDockStandalone {
             this.mnuAgentsNewUnparentedPane.ShortcutKeyDisplayString = "Ctrl+U";
             this.mnuAgentsNewUnparentedPane.Size         = new System.Drawing.Size(260, 22);
             this.mnuAgentsNewUnparentedPane.Text         = "Spawn Un&parented Pane";
-            this.mnuAgentsNewUnparentedPane.ToolTipText  = "Start one more Claude terminal the same way, but leave it on the desktop instead of in the dock.";
+            this.mnuAgentsNewUnparentedPane.ToolTipText  = "Start one more agent terminal the same way, but leave it on the desktop instead of in the dock.";
             this.mnuAgentsNewUnparentedPane.Click       += new System.EventHandler(this.mnuAgentsNewUnparentedPane_Click);
             //
             this.mnuAgentsUnparentActive.Name                     = "mnuAgentsUnparentActive";
@@ -204,7 +204,7 @@ namespace AgentDockStandalone {
             this.mnuAgentsCloseAndTerminate.Name        = "mnuAgentsCloseAndTerminate";
             this.mnuAgentsCloseAndTerminate.Size        = new System.Drawing.Size(260, 22);
             this.mnuAgentsCloseAndTerminate.Text        = "Close Dock && &Terminate All";
-            this.mnuAgentsCloseAndTerminate.ToolTipText = "Close the dock AND end every Claude session \u2014 absorbed terminals are killed, not released.";
+            this.mnuAgentsCloseAndTerminate.ToolTipText = "Close the dock AND end every agent session. Absorbed terminals end too, not released.";
             this.mnuAgentsCloseAndTerminate.Click      += new System.EventHandler(this.mnuAgentsCloseAndTerminate_Click);
 
             //

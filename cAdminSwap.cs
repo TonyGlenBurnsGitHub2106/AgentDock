@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 // "Become admin" -- a running Claude pane restarts as an administrator pane and resumes the same
-// conversation (Tony, 2026-11-12).
+// conversation (2026-11-12).
 //
 // Both docks compile this one file: AgentDockStandalone owns it and AgentDock links it, the same
 // arrangement as cPaneArranger.cs and cTabColor.cs. It is self-contained -- its own P/Invokes.
@@ -14,7 +14,7 @@ using System.Windows.Forms;
 //   1. A pane runs the become-admin skill, whose script drops a small request file into
 //      <source>\LeonardoConsolidated\XmlDataStorage\AgentDock\AdminRequests\ holding three lines:
 //      session=<conversation id>, pid=<the pane's claude.exe process id>, cwd=<its folder>.
-//   2. The dock polls that folder once a second. On a request it ASKS Tony (Yes / No) -- this
+//   2. The dock polls that folder once a second. On a request it ASKS the user (Yes / No) -- this
 //      dialog is the gate that stands in for the UAC prompt, because the dock is already elevated
 //      and anything that can write a file could otherwise get an admin pane.
 //   3. On Yes it waits for the conversation's transcript to go quiet (the turn has ended), closes
@@ -134,7 +134,7 @@ namespace AgentDockShared {
             }
 
             DialogResult dr = MessageBox.Show(mfrmOwner,
-                "A Claude pane asks to restart as ADMINISTRATOR.\r\n\r\n"
+                "A Claude Code pane asks to restart as ADMINISTRATOR.\r\n\r\n"
                 + "Folder:  " + strCwd + "\r\n"
                 + "Conversation:  " + strSession + "\r\n\r\n"
                 + "Yes closes that pane when its turn ends and reopens the same conversation "

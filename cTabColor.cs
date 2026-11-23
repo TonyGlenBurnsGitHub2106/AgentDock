@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-// Random Windows Terminal tab colors for the Agent Dock (Tony, 2026-10-16).
+// Random Windows Terminal tab colors for the Agent Dock (2026-10-16).
 //
 // Both docks compile this one file: AgentDockStandalone owns it and AgentDock links it, the same
 // arrangement as cPaneArranger.cs. It is self-contained -- its own P/Invokes -- so neither dock's

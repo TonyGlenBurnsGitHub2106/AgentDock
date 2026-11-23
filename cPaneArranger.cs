@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 // Story 5616 -- pane ordering and maximize for the Agent Dock.
 //
-// Both docks (AgentDockStandalone, the Start Menu one, and AgentDock, the Leonardo menu one)
+// (This file began in an older dock and was shared by two builds of it)
 // compile this one file: AgentDockStandalone owns it and AgentDock links it. It is deliberately
 // self-contained -- its own P/Invokes, its own menu items appended to the dock's Window menu at
 // run time -- so neither dock's Designer file or Win32.cs had to change, and a fix here reaches

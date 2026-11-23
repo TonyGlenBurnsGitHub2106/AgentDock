@@ -6,7 +6,7 @@ namespace AgentDockStandalone {
 
     internal static class Program {
 
-        // Standalone -- no Leonardo gate, no silent-exit. Double-clicking the exe
+        // No startup gate, no silent exit. Double-clicking the exe
         // always opens an empty dock. Optional flags pre-populate it.
         //
         //   AgentDockStandalone.exe                        Empty dock.
@@ -167,17 +167,20 @@ namespace AgentDockStandalone {
         }
 
         private static string DefaultCwd() {
-            // Spawn panes in the .NET source root -- same as Claude-Code2.bat does
-            // (cd /d C:\Tony\Dev\Dot_Net\Source then claude).
-            const string SOURCE = @"C:\Tony\Dev\Dot_Net\Source";
-            if (Directory.Exists(SOURCE)) return SOURCE;
+            // The dock's working folder: the start folder in config\pane.bat (Settings), else the
+            // user's profile folder. Panes themselves start wherever pane.bat sends them.
+            try {
+                string strFolder, strCommand; bool blnPlain;
+                cDockSettings.ReadPaneBat(out strFolder, out strCommand, out blnPlain);
+                if (strFolder.Length > 0 && Directory.Exists(strFolder)) return strFolder;
+            } catch { }
             string strProfile = Environment.GetEnvironmentVariable("USERPROFILE");
             return String.IsNullOrEmpty(strProfile) ? Environment.CurrentDirectory : strProfile;
         }
 
         private static void ShowUsage() {
             MessageBox.Show(
-                "AgentDockStandalone -- Claude Code MDI pane host\r\n\r\n"
+                "Agent Dock -- holds AI agent terminals as panes in one window\r\n\r\n"
                 + "Usage:\r\n"
                 + "  AgentDockStandalone.exe                       Empty dock.\r\n"
                 + "  AgentDockStandalone.exe --spawn N             Spawn N panes (1-16).\r\n"
@@ -185,7 +188,7 @@ namespace AgentDockStandalone {
                 + "  AgentDockStandalone.exe --bat <path>          Use a different bat.\r\n"
                 + "  AgentDockStandalone.exe --cwd <path>          Override working dir.\r\n\r\n"
                 + "Default bat: config\\pane.bat (copied from samples\\Copilot.bat on first run)\r\n"
-                + "Default cwd: C:\\Tony\\Dev\\Dot_Net\\Source, else your profile folder",
+                + "Default cwd: the start folder in Settings, else your profile folder",
                 "AgentDockStandalone",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);

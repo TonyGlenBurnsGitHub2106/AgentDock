@@ -70,7 +70,7 @@ namespace AgentDockStandalone {
                 this.FormBorderStyle = FormBorderStyle.None;
                 this.ControlBox      = false;
                 // With no title bar the panes ran together in one black sheet, so each gets a
-                // thin frame, the same on every pane (Tony preferred it to a blue active frame).
+                // thin frame, the same on every pane (preferred to a blue frame on the active pane).
                 mintFrame      = CNST_FRAME_PX;
                 this.BackColor = CNST_FRAME_IDLE;
             } else {

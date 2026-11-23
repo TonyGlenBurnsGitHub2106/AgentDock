@@ -23,33 +23,21 @@ namespace AgentDockStandalone {
         }
 
         // -------------------------------------------------------------------
-        // DISABLED LAUNCH PATH -- DO NOT RE-ENABLE WITHOUT TONY'S APPROVAL.
+        // DISABLED LAUNCH PATH -- DO NOT RE-ENABLE.
         //
-        // This file used to spawn Claude Code directly via:
-        //     new ProcessStartInfo("cmd.exe", "/k claude")
-        // and reparent the raw conhost window into this MDI child. That path
-        // is BAD for three reasons:
+        // This file used to start an agent directly with cmd.exe and reparent the raw console
+        // window into this MDI child. That path is wrong for three reasons:
         //
-        //   1. It bypasses the canonical launcher
-        //      "C:\Tony\Dev\Dot_Net\Source\_External Data\Batch Files\Claude-Code2.bat"
-        //      which is the ONLY place that sets `claude --dangerously-skip-permissions`.
-        //      Any pane spawned via this code launches `claude` with NO flag, so
-        //      every tool call and file edit prompts Tony for permission -- exactly
-        //      the "henpecking" the bat exists to prevent.
+        //   1. It bypasses the pane batch (config\pane.bat), the one place that says which
+        //      agent runs, in which folder, with which options.
+        //   2. It uses the raw console instead of Windows Terminal (wt.exe): wrong font, no
+        //      profile, no colors, broken scroll. The wt.exe path inherits the user's Windows
+        //      Terminal settings and looks right.
+        //   3. The dock must have EXACTLY ONE way to launch a pane, through wt.exe and the pane
+        //      batch. A second mechanism silently changes behavior depending on which path fires.
         //
-        //   2. It uses raw conhost instead of Windows Terminal (wt.exe), which
-        //      gives the "crap terminal" rendering (wrong font, no profile, no
-        //      colors, broken scroll). The wt.exe path the rest of AgentDock now
-        //      uses inherits Tony's WT profile and looks right.
-        //
-        //   3. It hides the launch from the user. Tony's stated rule:
-        //      AgentDock must have EXACTLY ONE way to launch Claude -- via the
-        //      Claude-Code2.bat through wt.exe. Any second mechanism is a trap
-        //      that silently changes behavior depending on which code path fires.
-        //
-        // The canonical launch lives in fAgentDockMain.SpawnPane() /
-        // StartReparentSequence(), which both do:
-        //     wt.exe --window new cmd /k "<repo>\_External Data\Batch Files\Claude-Code2.bat"
+        // The launch lives in fAgentDockMain.SpawnPane():
+        //     wt.exe --window new cmd /k "<config\pane.bat>"
         //
         // The original code is preserved below inside /* ... */ for archaeology.
         // If anything ever needs the reparent-into-MDI trick again, REWRITE it
@@ -73,7 +61,7 @@ namespace AgentDockStandalone {
                 LaunchAndEmbed();
             } catch (Exception ex) {
                 MessageBox.Show(this,
-                    "Could not launch Claude Code in this pane:\r\n\r\n" + ex.Message,
+                    "Could not launch the agent in this pane:\r\n\r\n" + ex.Message,
                     "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -100,7 +88,7 @@ namespace AgentDockStandalone {
             mhwndConsole = mproc.MainWindowHandle;
             if (mhwndConsole == IntPtr.Zero) {
                 throw new InvalidOperationException(
-                    "Timed out waiting for the console window. Is cmd.exe blocked or claude misbehaving?");
+                    "Timed out waiting for the console window.");
             }
 
             int style = Win32.GetWindowLong(mhwndConsole, Win32.GWL_STYLE);

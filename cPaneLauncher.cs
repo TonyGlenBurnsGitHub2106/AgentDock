@@ -3,11 +3,11 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-// Starts a pane's terminal at the right integrity level (Tony, 2026-11-12).
+// Starts a pane's terminal at the right integrity level (2026-11-12).
 //
 // Both docks compile this one file: AgentDockStandalone owns it and AgentDock links it.
 //
-// The problem: Tony runs the dock as administrator so admin panes can be absorbed (Windows UIPI
+// The problem: when the dock runs as administrator so admin panes can be absorbed (Windows UIPI
 // blocks a normal dock from reparenting an elevated window). But a process started by an
 // elevated process is elevated too, so every NORMAL pane came up as admin as well -- and every
 // pane runs with --dangerously-skip-permissions, so an all-admin dock has no gate left at all.

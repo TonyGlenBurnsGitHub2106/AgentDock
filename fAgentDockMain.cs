@@ -31,13 +31,13 @@ namespace AgentDockStandalone {
         private IntPtr mMouseHookId = IntPtr.Zero;
 
         // Pane order, custom tiling, maximize, reorder dialog and the Ctrl+Shift chords
-        // (Story 5616). Shared with the Leonardo-menu AgentDock.
+        // (Story 5616).
         private readonly cPaneArranger mPanes;
 
         // "Become admin": a pane asks, the dock reopens its conversation as an admin pane.
         private cAdminSwap mAdminSwap;
 
-        // The window's icon (Story 6817): AgentDock.ico, the Leonardo menu's Agent Dock robot,
+        // The window's icon (Story 6817): AgentDock.ico, the Agent Dock robot,
         // embedded in the exe as a resource and read from there. Reading it back out of the exe
         // file (Icon.ExtractAssociatedIcon) showed the standard icon on the work machine -- it
         // fails on some paths, such as a network share -- so that is only the fallback.
@@ -264,7 +264,7 @@ namespace AgentDockStandalone {
             }
 
             string strArgs = "--window new "
-                           + (ablnAdmin ? "--title \"[ADMIN] Claude Code\" " : "")
+                           + (ablnAdmin ? "--title \"[ADMIN] Agent\" " : "")
                            + cTabColor.TabColorArgument()
                            + "cmd /k "
                            + (astrCommand ?? ("\"" + mstrBatPath + "\""));
@@ -509,7 +509,7 @@ namespace AgentDockStandalone {
             SpawnPanes(1);
         }
 
-        // New Pane = "always add one fresh cmd /k claude in the source folder."
+        // New Pane = "always add one fresh pane running config\pane.bat."
         // Bypasses the top-up logic so it works even when the dock is already
         // full, and never absorbs an existing desktop WT window.
         private void mnuAgentsNewPane_Click(object sender, EventArgs e) {
@@ -817,12 +817,12 @@ namespace AgentDockStandalone {
             int intTotal = intAbsorbed + intSpawned;
             if (intTotal == 0) { this.Close(); return; }
 
-            string strMsg = "Close Agent Dock AND terminate every Claude session?\n\n";
+            string strMsg = "Close Agent Dock AND end every agent session?\n\n";
             if (intSpawned > 0)
                 strMsg += intSpawned + " spawned pane" + (intSpawned == 1 ? "" : "s") + " will be terminated.\n";
             if (intAbsorbed > 0)
                 strMsg += intAbsorbed + " absorbed terminal" + (intAbsorbed == 1 ? "" : "s")
-                       + " will be closed (claude sessions end).";
+                       + " will be closed (their sessions end).";
 
             if (MessageBox.Show(this, strMsg, "Agent Dock",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
