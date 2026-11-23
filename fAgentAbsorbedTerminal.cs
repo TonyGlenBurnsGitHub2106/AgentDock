@@ -28,15 +28,7 @@ namespace AgentDockStandalone {
         // The frame around a pane with no title bar (Story 6817). 0 when title bars show.
         private const int   CNST_FRAME_PX = 2;
         private static readonly Color CNST_FRAME_IDLE   = Color.FromArgb(70, 70, 70);
-        private static readonly Color CNST_FRAME_ACTIVE = Color.FromArgb(0, 120, 215);
         private int mintFrame;
-
-        // Blue on the pane the Agents menu acts on, gray on the rest. Called by the dock.
-        public void SetFrameActive(bool ablnActive) {
-            if (mintFrame == 0) return;
-            Color c = ablnActive ? CNST_FRAME_ACTIVE : CNST_FRAME_IDLE;
-            if (this.BackColor != c) this.BackColor = c;
-        }
 
         // Sizes the terminal to fill the pane inside its frame, aintShrink pixels smaller.
         private void PlaceAbsorbed(int aintShrink) {
@@ -72,7 +64,7 @@ namespace AgentDockStandalone {
                 this.FormBorderStyle = FormBorderStyle.None;
                 this.ControlBox      = false;
                 // With no title bar the panes ran together in one black sheet, so each gets a
-                // thin frame: gray, or blue on the pane the Agents menu acts on (SetFrameActive).
+                // thin frame, the same on every pane (Tony preferred it to a blue active frame).
                 mintFrame      = CNST_FRAME_PX;
                 this.BackColor = CNST_FRAME_IDLE;
             }
