@@ -929,8 +929,10 @@ namespace AgentDockStandalone {
               + (strBuild.Length > 0 ? ("Built " + strBuild + "\r\n") : "")
               + "\r\n"
               + "Holds several AI agent terminals in one window.\r\n\r\n"
-              + ".NET Framework 4.8. Runs as administrator only when Settings allows administrator panes.\r\n"
-              + "Normal panes start with normal rights; admin panes say [ADMIN].\r\n\r\n"
+              + "Running now: " + (IsRunningElevated() ? "as administrator" : "with normal rights") + ".\r\n"
+              + "Administrator panes: " + (cDockSettings.AllowAdminPanes ? "allowed" : "off") + " (Settings -> Agent Dock Settings).\r\n"
+              + "Normal panes always start with normal rights. Admin panes say [ADMIN].\r\n\r\n"
+              + ".NET Framework 4.8.\r\n\r\n"
               + "Press F1 or Help -> Usage for the menu reference.";
 
             MessageBox.Show(this, strMsg, "About Agent Dock",
