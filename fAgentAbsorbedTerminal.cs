@@ -60,14 +60,26 @@ namespace AgentDockStandalone {
             this.Text = strTitle;
             // config\agentdock.ini HidePaneTitleBars (default true, Story 6817): no title bar on
             // the pane, so the terminal gets that row. Close / Undock live on the Agents menu.
-            if (cDockSettings.HidePaneTitleBars) {
+            ApplyTitleBar(cDockSettings.HidePaneTitleBars);
+        }
+
+        // Shows or hides this pane's title bar. Also called by Settings on open panes, so a
+        // change there takes effect at once.
+        public void ApplyTitleBar(bool ablnHide) {
+            if (ablnHide) {
                 this.FormBorderStyle = FormBorderStyle.None;
                 this.ControlBox      = false;
                 // With no title bar the panes ran together in one black sheet, so each gets a
                 // thin frame, the same on every pane (Tony preferred it to a blue active frame).
                 mintFrame      = CNST_FRAME_PX;
                 this.BackColor = CNST_FRAME_IDLE;
+            } else {
+                this.FormBorderStyle = FormBorderStyle.Sizable;
+                this.ControlBox      = true;
+                mintFrame      = 0;
+                this.BackColor = Color.Black;
             }
+            PlaceAbsorbed(0);
         }
 
         public IntPtr AbsorbedHwnd  { get { return mhwndAbsorbed; } }

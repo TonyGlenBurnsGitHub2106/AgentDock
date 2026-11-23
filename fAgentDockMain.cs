@@ -57,6 +57,7 @@ namespace AgentDockStandalone {
             InitializeComponent();
             LoadDockIcon();
             AddCloseActivePaneMenuItem();
+            AddSettingsMenu();
             mintInitialSpawn   = aintInitialSpawn;
             mblnInitialAbsorb  = ablnInitialAbsorb;
             mstrBatPath        = astrBatPath;
@@ -577,6 +578,52 @@ namespace AgentDockStandalone {
             mnuAgentsCloseActive.Click += delegate { CloseActivePane(); };
             int intAt = mnuAgents.DropDownItems.IndexOf(mnuAgentsUnparentActive);
             mnuAgents.DropDownItems.Insert(intAt + 1, mnuAgentsCloseActive);
+        }
+
+        // Settings menu, beside Window (Story 6817): the settings dialog, and the config folder
+        // in Explorer.
+        private void AddSettingsMenu() {
+            ToolStripMenuItem mnuSettings = new ToolStripMenuItem("&Settings");
+            ToolStripMenuItem mnuEdit = new ToolStripMenuItem("Agent Dock &Settings...");
+            mnuEdit.ToolTipText = "The agent command, the start folder and the pane title bars.";
+            mnuEdit.Click += delegate { ShowSettings(); };
+            ToolStripMenuItem mnuFolder = new ToolStripMenuItem("&Open Config Folder");
+            mnuFolder.ToolTipText = "Open the folder holding pane.bat and agentdock.ini in Explorer.";
+            mnuFolder.Click += delegate { OpenConfigFolder(); };
+            mnuSettings.DropDownItems.Add(mnuEdit);
+            mnuSettings.DropDownItems.Add(mnuFolder);
+            msMenu.Items.Insert(msMenu.Items.IndexOf(mnuWindow) + 1, mnuSettings);
+        }
+
+        private void ShowSettings() {
+            bool blnWasHidden = cDockSettings.HidePaneTitleBars;
+            using (fSettings dlg = new fSettings(mstrBatPath)) {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            }
+            bool blnHide = cDockSettings.HidePaneTitleBars;
+            if (blnHide != blnWasHidden) {
+                foreach (Form f in this.MdiChildren) {
+                    fAgentAbsorbedTerminal abs = f as fAgentAbsorbedTerminal;
+                    if (abs != null) abs.ApplyTitleBar(blnHide);
+                }
+                if (mPanes != null) mPanes.ReTile();
+            }
+            this.tslStatus.Text = "Settings saved.";
+        }
+
+        private void OpenConfigFolder() {
+            string strFolder = cDockSettings.ConfigFolder;
+            if (String.IsNullOrEmpty(strFolder)) {
+                this.tslStatus.Text = "No config folder was found.";
+                return;
+            }
+            try {
+                Directory.CreateDirectory(strFolder);
+                Process.Start("explorer.exe", "\"" + strFolder + "\"");
+            } catch (Exception ex) {
+                MessageBox.Show(this, "Could not open the config folder:\r\n\r\n" + ex.Message,
+                    "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void CloseActivePane() {

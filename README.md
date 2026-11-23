@@ -25,6 +25,12 @@ the C# compiler that ships inside Windows and writes `bin\AgentDockStandalone.ex
 With Visual Studio you can instead open `AgentDockStandalone.csproj`, or run
 `MSBuild.exe AgentDockStandalone.csproj -p:Configuration=Release` (output in `bin\Release\`).
 
+## Settings
+
+**Settings -> Agent Dock Settings** sets the agent command each new pane runs, the folder it
+starts in, and whether panes show a title bar. No file editing needed.
+**Settings -> Open Config Folder** opens the folder holding those files in Explorer.
+
 ## The config folder
 
 Each new pane runs one batch file: `config\pane.bat`. The `config` folder belongs to this
