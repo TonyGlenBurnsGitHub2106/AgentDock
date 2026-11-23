@@ -19,7 +19,16 @@ namespace AgentDockStandalone {
         static void Main(string[] args) {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            // Anything that stops the dock from starting is caught here and offered to the user
+            // as text for an AI agent to fix (Story 6817).
+            try {
+                Run(args);
+            } catch (Exception ex) {
+                cPrerequisites.ReportStartupFailure(ex);
+            }
+        }
 
+        private static void Run(string[] args) {
             int    intSpawn  = 0;
             bool   blnAbsorb = false;
             string strBat    = DefaultBatPath();
@@ -45,6 +54,10 @@ namespace AgentDockStandalone {
                     return;
                 }
             }
+
+            // Windows Terminal, the agent and .NET 4.8 are checked; anything missing is offered to
+            // the user as install instructions for an AI agent. The dock opens either way.
+            cPrerequisites.CheckAtStartup(strBat);
 
             Application.Run(new fAgentDockMain(intSpawn, blnAbsorb, strBat, strCwd));
         }

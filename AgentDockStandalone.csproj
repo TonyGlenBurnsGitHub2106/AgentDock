@@ -65,6 +65,7 @@
     <Compile Include="cTabColor.cs" />
     <Compile Include="cAdminSwap.cs" />
     <Compile Include="cDockSettings.cs" />
+    <Compile Include="cPrerequisites.cs" />
     <Compile Include="fSettings.cs">
       <SubType>Form</SubType>
     </Compile>

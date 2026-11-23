@@ -9,6 +9,24 @@ Open this help with **Help -> Usage and Menu Reference** (F1).
 
 ---
 
+## What it needs
+
+- **Windows 10 or 11** with **.NET Framework 4.8** (built into Windows 10 since the May 2019
+  update, and into every Windows 11). Nothing to install on most computers.
+- **Windows Terminal**, because every pane is a Windows Terminal window.
+- **Your agent**, for example GitHub Copilot CLI (`copilot`) or Claude Code (`claude`).
+- **git**, only for Settings -> Update Agent Dock.
+
+**When something is missing, the dock tells you.** As it starts, it checks for Windows Terminal,
+.NET Framework 4.8 and the agent your panes run. If one is missing, it names it and offers to
+copy install instructions for an AI agent to the clipboard: paste them into Copilot, Claude or
+any agent, and it can walk you through the install. The dock opens either way. If the dock
+cannot start at all, it offers the error details the same way. If .NET itself is missing,
+`build.cmd` says so and puts the instructions on the clipboard, since the dock cannot run
+without it.
+
+---
+
 ## Getting started
 
 1. Build it once: double-click `build.cmd` in the Agent Dock folder.
