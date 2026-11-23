@@ -15,6 +15,7 @@ namespace AgentDockStandalone {
         private readonly Button   btnBrowse   = new Button();
         private readonly CheckBox chkHideBars = new CheckBox();
         private readonly CheckBox chkAdmin    = new CheckBox();
+        private readonly CheckBox chkCompose  = new CheckBox();
         private readonly Button   btnOK       = new Button();
         private readonly Button   btnCancel   = new Button();
 
@@ -41,7 +42,7 @@ namespace AgentDockStandalone {
             this.ShowInTaskbar   = false;
             this.StartPosition   = FormStartPosition.CenterParent;
             this.AutoScaleMode   = AutoScaleMode.Font;
-            this.ClientSize      = new Size(520, 356);
+            this.ClientSize      = new Size(520, 402);
 
             int intLeft = 16, intWidth = 488, y = 16;
 
@@ -71,6 +72,14 @@ namespace AgentDockStandalone {
             chkAdmin.CheckAlign = ContentAlignment.TopLeft;
             chkAdmin.TextAlign  = ContentAlignment.TopLeft;
             this.Controls.Add(chkAdmin);
+            y += 42;
+
+            // Story 6826: off by default, and then the dock shows no compose box at all.
+            chkCompose.Text = "Show the compose box under the panes: write prompts like in any Windows text box. Enter sends to the pane you last clicked.";
+            chkCompose.SetBounds(intLeft, y, intWidth, 36);
+            chkCompose.CheckAlign = ContentAlignment.TopLeft;
+            chkCompose.TextAlign  = ContentAlignment.TopLeft;
+            this.Controls.Add(chkCompose);
             y += 46;
 
             Label lblNote = new Label();
@@ -79,7 +88,7 @@ namespace AgentDockStandalone {
             lblNote.Text = mstrOverrideBat != null
                 ? "This dock was started with --bat " + Path.GetFileName(mstrOverrideBat)
                   + ", so new panes run that file. The pane fields above apply when it starts without --bat."
-                : "Saved in the config folder (Settings, Open Config Folder). New panes use the changes. The title bar change shows at once.";
+                : "Saved in the config folder (Settings, Open Config Folder). New panes use the changes. The title bar and compose box changes show at once.";
             this.Controls.Add(lblNote);
 
             btnOK.Text     = "OK";
@@ -112,6 +121,7 @@ namespace AgentDockStandalone {
             txtCommand.Text     = strCommand;
             chkHideBars.Checked = cDockSettings.HidePaneTitleBars;
             chkAdmin.Checked    = cDockSettings.StartAsAdministrator;
+            chkCompose.Checked  = cDockSettings.ShowComposeBox;
             mblnPlainBat        = blnPlain;
         }
 
@@ -150,7 +160,7 @@ namespace AgentDockStandalone {
             }
             try {
                 cDockSettings.WritePaneBat(strFolder, strCommand);
-                cDockSettings.Save(chkHideBars.Checked, chkAdmin.Checked);
+                cDockSettings.Save(chkHideBars.Checked, chkAdmin.Checked, chkCompose.Checked);
             } catch (Exception ex) {
                 MessageBox.Show(this, "Could not save the settings:\r\n\r\n" + ex.Message,
                     "Agent Dock Settings", MessageBoxButtons.OK, MessageBoxIcon.Warning);

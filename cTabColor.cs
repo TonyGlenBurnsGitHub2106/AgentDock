@@ -133,7 +133,8 @@ namespace AgentDockShared {
 
         // Every process whose parent is WindowsTerminal.exe, except its OpenConsole.exe hosts --
         // that is, the shell running in each tab.
-        private static List<uint> FindTerminalShells() {
+        // Also used by cConsoleInput (Story 6826) to find the console behind a pane.
+        internal static List<uint> FindTerminalShells() {
             List<uint>           lstShells   = new List<uint>();
             List<uint>           lstTerminal = new List<uint>();
             List<PROCESSENTRY32> lstAll      = new List<PROCESSENTRY32>();

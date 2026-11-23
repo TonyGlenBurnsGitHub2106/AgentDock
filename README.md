@@ -28,7 +28,7 @@ With Visual Studio you can instead open `AgentDockStandalone.csproj`, or run
 ## Settings
 
 **Settings -> Agent Dock Settings** sets the agent command each new pane runs, the folder it
-starts in, and whether panes show a title bar. No file editing needed.
+starts in, whether panes show a title bar, and the compose box. No file editing needed.
 **Settings -> Open Config Folder** opens the folder holding those files in Explorer.
 **Settings -> Update Agent Dock** gets the newest version: the dock closes (open panes go to
 the desktop, still running), `update.cmd` runs `git pull`, builds, and starts the new dock,
@@ -51,6 +51,9 @@ run. Each one has a comment saying what it does. Restart the dock after a change
 - `StartAsAdministrator = false` (the default): the dock starts with normal rights, and asking
   for an admin pane offers to restart it as administrator. `true`: it starts as administrator
   (Windows asks), so admin panes open with no restart. Panes are never admin unless asked for.
+- `ShowComposeBox = false` (the default): no compose box. `true`: a Windows text box under the
+  panes for writing prompts. Enter sends to the pane you last clicked, Shift+Enter is a new line,
+  Up brings back earlier prompts. See the help (F1), "The compose box".
 
 ## Status
 

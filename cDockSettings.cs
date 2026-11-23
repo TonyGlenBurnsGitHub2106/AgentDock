@@ -27,6 +27,11 @@ namespace AgentDockStandalone {
         public const string KEY_START_AS_ADMIN = "StartAsAdministrator";
         private const bool  DEFAULT_START_AS_ADMIN = false;
 
+        // Show the compose box under the panes (Story 6826): a Windows text box for writing
+        // prompts, Enter sends to the pane last clicked. Off by default, and then not shown at all.
+        public const string KEY_SHOW_COMPOSE_BOX = "ShowComposeBox";
+        private const bool  DEFAULT_SHOW_COMPOSE_BOX = false;
+
         private static readonly Dictionary<string, string> mdicValues =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static string mstrConfigFolder;
@@ -45,6 +50,10 @@ namespace AgentDockStandalone {
             get { return ReadBool(KEY_START_AS_ADMIN, DEFAULT_START_AS_ADMIN); }
         }
 
+        public static bool ShowComposeBox {
+            get { return ReadBool(KEY_SHOW_COMPOSE_BOX, DEFAULT_SHOW_COMPOSE_BOX); }
+        }
+
         // Reads config\agentdock.ini from the config folder, writing the defaults first when it
         // is missing. A null or unusable folder leaves every setting at its default.
         public static void Load(string astrConfigFolder) {
@@ -55,7 +64,7 @@ namespace AgentDockStandalone {
             try {
                 if (!File.Exists(strFile)) {
                     Directory.CreateDirectory(astrConfigFolder);
-                    File.WriteAllText(strFile, FileText(DEFAULT_HIDE_PANE_TITLE_BARS, DEFAULT_START_AS_ADMIN));
+                    File.WriteAllText(strFile, FileText(DEFAULT_HIDE_PANE_TITLE_BARS, DEFAULT_START_AS_ADMIN, DEFAULT_SHOW_COMPOSE_BOX));
                 }
                 foreach (string strRaw in File.ReadAllLines(strFile)) {
                     string strLine = strRaw.Trim();
@@ -68,12 +77,14 @@ namespace AgentDockStandalone {
         }
 
         // Writes agentdock.ini with the given values. Throws when the file cannot be written.
-        public static void Save(bool ablnHidePaneTitleBars, bool ablnStartAsAdmin) {
+        public static void Save(bool ablnHidePaneTitleBars, bool ablnStartAsAdmin, bool ablnShowComposeBox) {
             if (String.IsNullOrEmpty(mstrConfigFolder)) throw new InvalidOperationException("No config folder was found.");
             Directory.CreateDirectory(mstrConfigFolder);
-            File.WriteAllText(Path.Combine(mstrConfigFolder, CNST_FILE), FileText(ablnHidePaneTitleBars, ablnStartAsAdmin));
+            File.WriteAllText(Path.Combine(mstrConfigFolder, CNST_FILE),
+                FileText(ablnHidePaneTitleBars, ablnStartAsAdmin, ablnShowComposeBox));
             mdicValues[KEY_HIDE_PANE_TITLE_BARS] = ablnHidePaneTitleBars ? "true" : "false";
-            mdicValues[KEY_START_AS_ADMIN]    = ablnStartAsAdmin   ? "true" : "false";
+            mdicValues[KEY_START_AS_ADMIN]       = ablnStartAsAdmin      ? "true" : "false";
+            mdicValues[KEY_SHOW_COMPOSE_BOX]     = ablnShowComposeBox    ? "true" : "false";
         }
 
         // ---------------------------------------------------------------- pane.bat
@@ -138,7 +149,7 @@ namespace AgentDockStandalone {
             return ablnDefault;
         }
 
-        private static string FileText(bool ablnHidePaneTitleBars, bool ablnStartAsAdmin) {
+        private static string FileText(bool ablnHidePaneTitleBars, bool ablnStartAsAdmin, bool ablnShowComposeBox) {
             return "# Agent Dock settings for this machine. Lines are Name = value; # starts a comment.\r\n"
                  + "# Easiest: change them in the dock with Settings -> Agent Dock Settings.\r\n"
                  + "# The command a new pane runs, and its start folder, are in pane.bat beside this file.\r\n"
@@ -151,7 +162,12 @@ namespace AgentDockStandalone {
                  + "# false (the default): the dock starts with normal rights. Asking for an admin pane offers\r\n"
                  + "#   to restart the dock as administrator first. Panes are never admin unless you ask.\r\n"
                  + "# true: the dock starts as administrator (Windows asks), so admin panes open with no restart.\r\n"
-                 + KEY_START_AS_ADMIN + " = " + (ablnStartAsAdmin ? "true" : "false") + "\r\n";
+                 + KEY_START_AS_ADMIN + " = " + (ablnStartAsAdmin ? "true" : "false") + "\r\n"
+                 + "\r\n"
+                 + "# true: a compose box under the panes, for writing prompts like in any Windows text box.\r\n"
+                 + "#   Enter sends to the pane you last clicked, Shift+Enter is a new line, Up brings back earlier prompts.\r\n"
+                 + "# false (the default): no compose box. You type in the terminals as usual.\r\n"
+                 + KEY_SHOW_COMPOSE_BOX + " = " + (ablnShowComposeBox ? "true" : "false") + "\r\n";
         }
     }
 }

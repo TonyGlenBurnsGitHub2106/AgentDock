@@ -64,6 +64,35 @@ namespace AgentDockStandalone {
             mstrCwd            = astrCwd;
             mPanes = new cPaneArranger(this, this.mnuWindow,
                                        delegate(string s) { this.tslStatus.Text = s; });
+            AddComposeBox();
+        }
+
+        // ---------------------------------------------------------------- compose box
+
+        // Story 6826: the compose box across the bottom, above the status bar. Built always, shown
+        // only when Settings turns it on (config\agentdock.ini ShowComposeBox, default false).
+        private cComposeBox mCompose;
+
+        private void AddComposeBox() {
+            mCompose = new cComposeBox(ComposeTarget, delegate(string s) { this.tslStatus.Text = s; });
+            this.Controls.Add(mCompose);
+            // Docking runs from the back of the z-order to the front: the menu and status bar stay
+            // outermost, then the compose box, and the pane area fills what is left.
+            MdiClient mdi = null;
+            foreach (Control c in this.Controls) { if (c is MdiClient) mdi = (MdiClient)c; }
+            if (mdi != null) {
+                this.Controls.SetChildIndex(mdi, 0);
+                this.Controls.SetChildIndex(mCompose, 1);
+            }
+            mCompose.SetShown(cDockSettings.ShowComposeBox);
+        }
+
+        // Where a prompt goes: the pane last clicked, or the only pane when there is one.
+        private fAgentAbsorbedTerminal ComposeTarget() {
+            Form pane = mPanes == null ? null : mPanes.CurrentPane();
+            if (pane == null && this.MdiChildren != null && this.MdiChildren.Length == 1)
+                pane = this.MdiChildren[0];
+            return pane as fAgentAbsorbedTerminal;
         }
 
         protected override void OnLoad(EventArgs e) {
@@ -612,7 +641,7 @@ namespace AgentDockStandalone {
         private void AddSettingsMenu() {
             ToolStripMenuItem mnuSettings = new ToolStripMenuItem("&Settings");
             ToolStripMenuItem mnuEdit = new ToolStripMenuItem("Agent Dock &Settings...");
-            mnuEdit.ToolTipText = "The agent command, the start folder and the pane title bars.";
+            mnuEdit.ToolTipText = "The agent command, the start folder, the pane title bars and the compose box.";
             mnuEdit.Click += delegate { ShowSettings(); };
             ToolStripMenuItem mnuFolder = new ToolStripMenuItem("&Open Config Folder");
             mnuFolder.ToolTipText = "Open the folder holding pane.bat and agentdock.ini in Explorer.";
@@ -630,6 +659,7 @@ namespace AgentDockStandalone {
         private void ShowSettings() {
             bool blnWasHidden = cDockSettings.HidePaneTitleBars;
             bool blnWasAdmin  = cDockSettings.StartAsAdministrator;
+            bool blnWasCompose = cDockSettings.ShowComposeBox;
             using (fSettings dlg = new fSettings(mstrBatPath)) {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
             }
@@ -640,6 +670,12 @@ namespace AgentDockStandalone {
                     if (abs != null) abs.ApplyTitleBar(blnHide);
                 }
                 if (mPanes != null) mPanes.ReTile();
+            }
+            bool blnCompose = cDockSettings.ShowComposeBox;
+            if (blnCompose != blnWasCompose) {
+                mCompose.SetShown(blnCompose);
+                if (mPanes != null) mPanes.ReTile();
+                if (blnCompose) mCompose.FocusPrompt();
             }
             this.tslStatus.Text = "Settings saved.";
             bool blnAdmin = cDockSettings.StartAsAdministrator;

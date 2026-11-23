@@ -49,9 +49,10 @@ starts out running GitHub Copilot CLI (`copilot`) in your profile folder.
 | Start folder | Where each new pane starts. **Browse...** picks it. |
 | Hide the title bar on each pane | On (the default): panes have no title bar, just a thin frame, so the terminal gets one more row. Off: each pane has its own title bar with a close button and an Undock menu. |
 | Start the dock as administrator | Off (the default): the dock starts with normal rights and Windows does not ask. Asking for an admin pane offers to restart it as administrator then. On: the dock starts as administrator (Windows asks), so admin panes open with no restart. Panes are never admin unless you ask for one. See **Admin panes**. |
+| Show the compose box | Off (the default): there is no compose box. On: a text box across the bottom of the dock for writing prompts. See **The compose box**. |
 
 **OK** saves, **Cancel** or Escape changes nothing. New panes use the new command and folder.
-The title bar change shows on open panes at once. Changing **Start the dock as administrator** offers
+The title bar and compose box changes show at once. Changing **Start the dock as administrator** offers
 to restart the dock right away; your open panes keep running and come back in.
 
 **Settings -> Open Config Folder** opens the folder holding the settings in Explorer.
@@ -107,6 +108,28 @@ terminal.
 **Shortcuts work while you are typing in a pane.** The dock catches them first whenever it is
 the window in front, so the terminal never sees them. That also means Ctrl+N and Ctrl+U do not
 reach your agent while the dock is in front.
+
+---
+
+## The compose box
+
+Turn it on in **Settings -> Agent Dock Settings -> Show the compose box**. Off, the dock shows
+no compose box at all.
+
+It is a plain Windows text box across the bottom of the dock. Write your prompt there the way
+you write in any Windows app: click anywhere in the text, select with the mouse, Ctrl+A, Ctrl+X,
+Ctrl+C, Ctrl+V, Ctrl+Z.
+
+- **Enter** (or **Send**) types the prompt into the agent of the pane you last clicked and sends
+  it. The box empties and is ready for the next one.
+- **Shift+Enter** starts a new line. A prompt with several lines reaches the agent as one prompt.
+- **Up** on the first line brings back earlier prompts, newest first. **Down** goes forward again,
+  back to what you were writing.
+- Under **Send** it says which pane the prompt goes to. Click inside another pane to change it.
+- You can still type in the terminals directly. The answers show in the panes as always.
+
+If a prompt cannot be sent, it stays in the box and the status bar says why. A pane running as
+administrator can only be reached while the dock itself runs as administrator.
 
 ---
 
