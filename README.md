@@ -30,6 +30,10 @@ With Visual Studio you can instead open `AgentDockStandalone.csproj`, or run
 **Settings -> Agent Dock Settings** sets the agent command each new pane runs, the folder it
 starts in, and whether panes show a title bar. No file editing needed.
 **Settings -> Open Config Folder** opens the folder holding those files in Explorer.
+**Settings -> Update Agent Dock** gets the newest version: the dock closes (open panes go to
+the desktop, still running), `update.cmd` runs `git pull`, builds, and starts the new dock,
+which takes the panes back. Needs a git clone. If anything fails, the window says why and the
+dock you had starts again. `update.cmd` can also be run by hand with the dock closed.
 
 ## The config folder
 

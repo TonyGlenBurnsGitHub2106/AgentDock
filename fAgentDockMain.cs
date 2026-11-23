@@ -590,8 +590,13 @@ namespace AgentDockStandalone {
             ToolStripMenuItem mnuFolder = new ToolStripMenuItem("&Open Config Folder");
             mnuFolder.ToolTipText = "Open the folder holding pane.bat and agentdock.ini in Explorer.";
             mnuFolder.Click += delegate { OpenConfigFolder(); };
+            ToolStripMenuItem mnuUpdate = new ToolStripMenuItem("&Update Agent Dock");
+            mnuUpdate.ToolTipText = "Get the newest version with git, build it, and restart the dock. Open panes keep running.";
+            mnuUpdate.Click += delegate { UpdateAgentDock(); };
             mnuSettings.DropDownItems.Add(mnuEdit);
             mnuSettings.DropDownItems.Add(mnuFolder);
+            mnuSettings.DropDownItems.Add(new ToolStripSeparator());
+            mnuSettings.DropDownItems.Add(mnuUpdate);
             msMenu.Items.Insert(msMenu.Items.IndexOf(mnuWindow) + 1, mnuSettings);
         }
 
@@ -609,6 +614,79 @@ namespace AgentDockStandalone {
                 if (mPanes != null) mPanes.ReTile();
             }
             this.tslStatus.Text = "Settings saved.";
+        }
+
+        // Settings -> Update Agent Dock (Story 6817). The exe cannot be replaced while it runs, so
+        // the dock hands off to update.cmd and closes: the script waits for this process to end,
+        // runs git pull, build.cmd, then starts the new dock. Open panes are released to the
+        // desktop alive first, and the new dock is started with --absorb to take them back.
+        private const string CNST_UPDATE_SCRIPT = "update.cmd";
+        private const string CNST_RELAUNCH_ENV  = "AGENTDOCK_RELAUNCH_ARGS";
+
+        private void UpdateAgentDock() {
+            string strRoot   = Program.RepoRoot;
+            string strScript = strRoot == null ? null : Path.Combine(strRoot, CNST_UPDATE_SCRIPT);
+            if (strScript == null || !File.Exists(strScript)) {
+                MessageBox.Show(this, "update.cmd was not found beside this Agent Dock, so it cannot update itself.",
+                    "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            int intPanes = (this.MdiChildren == null) ? 0 : this.MdiChildren.Length;
+            DialogResult dr = MessageBox.Show(this,
+                "Update Agent Dock?\r\n\r\n"
+                + "The dock closes, gets the newest version with git, builds it, and starts again. "
+                + "A window shows the progress.\r\n\r\n"
+                + (intPanes > 0
+                    ? "Your " + intPanes + " open pane" + (intPanes == 1 ? "" : "s")
+                      + " keep running: they go to the desktop and the new dock takes them back."
+                    : "No panes are open."),
+                "Agent Dock", MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1);
+            if (dr != DialogResult.Yes) return;
+
+            try {
+                ProcessStartInfo psi = new ProcessStartInfo("cmd.exe",
+                    "/c \"\"" + strScript + "\" " + Process.GetCurrentProcess().Id + "\"");
+                psi.UseShellExecute  = false;
+                psi.WorkingDirectory = strRoot;
+                psi.EnvironmentVariables[CNST_RELAUNCH_ENV] = RelaunchArgs(intPanes > 0);
+                Process.Start(psi);
+            } catch (Exception ex) {
+                MessageBox.Show(this, "Could not start the update:\r\n\r\n" + ex.Message,
+                    "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Release every pane alive (as Unparent All does), then close without the
+            // terminate prompt -- there is nothing left to terminate.
+            List<fAgentAbsorbedTerminal> lst = new List<fAgentAbsorbedTerminal>();
+            foreach (Form f in this.MdiChildren) {
+                fAgentAbsorbedTerminal abs = f as fAgentAbsorbedTerminal;
+                if (abs != null) lst.Add(abs);
+            }
+            foreach (fAgentAbsorbedTerminal abs in lst) {
+                abs.SuppressTerminateOnClose = true;
+                abs.UnparentAndRestore();
+                abs.Close();
+            }
+            mblnTerminateOnClose = true;
+            this.Close();
+        }
+
+        // The restarted dock gets the same --bat / --cwd this one was started with, plus
+        // --absorb when panes were open.
+        private static string RelaunchArgs(bool ablnAbsorb) {
+            StringBuilder sb = new StringBuilder();
+            string[] astr = Environment.GetCommandLineArgs();
+            for (int i = 1; i < astr.Length; i++) {
+                string a = astr[i];
+                bool blnPair = (a == "--bat" || a == "-b" || a == "--cwd" || a == "-d");
+                if (blnPair && i + 1 < astr.Length) {
+                    sb.Append(a).Append(" \"").Append(astr[++i]).Append("\" ");
+                }
+            }
+            if (ablnAbsorb) sb.Append("--absorb");
+            return sb.ToString().Trim();
         }
 
         private void OpenConfigFolder() {

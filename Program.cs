@@ -78,6 +78,9 @@ namespace AgentDockStandalone {
             return strConfigBat;   // returned even if missing -- New Pane says where it looked
         }
 
+        // The repo root (where update.cmd and build.cmd live), or null. Used by Update Agent Dock.
+        internal static string RepoRoot { get { return FindRepoRoot(); } }
+
         // The folder holding config\pane.bat, or else the one holding samples\, searching the
         // exe's folder and up to CNST_LEVELS_UP parents. Null when neither is found.
         private static string FindRepoRoot() {
