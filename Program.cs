@@ -49,10 +49,21 @@ namespace AgentDockStandalone {
                     strBat = args[++i];
                 } else if ((a == "--cwd" || a == "-d") && i + 1 < args.Length) {
                     strCwd = args[++i];
+                } else if (a == "--wait-pid" && i + 1 < args.Length) {
+                    int intPid;
+                    if (Int32.TryParse(args[++i], out intPid)) WaitForExit(intPid);
                 } else if (a == "--help" || a == "-h" || a == "/?") {
                     ShowUsage();
                     return;
                 }
+            }
+
+            // Settings -> "Allow administrator panes" (Story 6817, default off). The dock starts
+            // with normal rights (app.manifest asInvoker). With the setting on, it restarts itself
+            // as administrator so admin panes can dock inside it. When Windows' prompt is
+            // declined, the dock carries on with normal rights.
+            if (cDockSettings.AllowAdminPanes && !AgentDockShared.cPaneLauncher.IsRunningElevated()) {
+                if (RestartAsAdministrator(args)) return;
             }
 
             // Windows Terminal, the agent and .NET 4.8 are checked; anything missing is offered to
@@ -89,6 +100,40 @@ namespace AgentDockStandalone {
                 } catch { }
             }
             return strConfigBat;   // returned even if missing -- New Pane says where it looked
+        }
+
+        // Starts this exe again as administrator with the same arguments. False when Windows'
+        // prompt was declined or the start failed, so this copy should carry on.
+        private static bool RestartAsAdministrator(string[] args) {
+            try {
+                System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo(Application.ExecutablePath);
+                psi.Arguments       = JoinArgs(args);
+                psi.UseShellExecute = true;
+                psi.Verb            = "runas";
+                System.Diagnostics.Process.Start(psi);
+                return true;
+            } catch (Exception) {
+                return false;   // most often: the user said No to Windows' prompt
+            }
+        }
+
+        internal static string JoinArgs(string[] args) {
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            foreach (string a in args) {
+                if (sb.Length > 0) sb.Append(' ');
+                sb.Append('"').Append(a.Replace("\"", "")).Append('"');
+            }
+            return sb.ToString();
+        }
+
+        // A restarted dock waits for the one it replaces to close, so the panes that one releases
+        // are on the desktop before this one absorbs them (Settings restart, Story 6817).
+        private static void WaitForExit(int aintPid) {
+            try {
+                using (System.Diagnostics.Process p = System.Diagnostics.Process.GetProcessById(aintPid)) {
+                    p.WaitForExit(20000);
+                }
+            } catch { /* already gone */ }
         }
 
         // The repo root (where update.cmd and build.cmd live), or null. Used by Update Agent Dock.

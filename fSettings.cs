@@ -14,6 +14,7 @@ namespace AgentDockStandalone {
         private readonly TextBox  txtFolder   = new TextBox();
         private readonly Button   btnBrowse   = new Button();
         private readonly CheckBox chkHideBars = new CheckBox();
+        private readonly CheckBox chkAdmin    = new CheckBox();
         private readonly Button   btnOK       = new Button();
         private readonly Button   btnCancel   = new Button();
 
@@ -40,7 +41,7 @@ namespace AgentDockStandalone {
             this.ShowInTaskbar   = false;
             this.StartPosition   = FormStartPosition.CenterParent;
             this.AutoScaleMode   = AutoScaleMode.Font;
-            this.ClientSize      = new Size(520, 300);
+            this.ClientSize      = new Size(520, 356);
 
             int intLeft = 16, intWidth = 488, y = 16;
 
@@ -63,7 +64,14 @@ namespace AgentDockStandalone {
             chkHideBars.Text = "Hide the title bar on each pane (one more row for the terminal)";
             chkHideBars.SetBounds(intLeft, y, intWidth, 24);
             this.Controls.Add(chkHideBars);
-            y += 34;
+            y += 28;
+
+            chkAdmin.Text = "Allow administrator panes (the dock then runs as administrator, and Windows asks when it starts)";
+            chkAdmin.SetBounds(intLeft, y, intWidth, 36);
+            chkAdmin.CheckAlign = ContentAlignment.TopLeft;
+            chkAdmin.TextAlign  = ContentAlignment.TopLeft;
+            this.Controls.Add(chkAdmin);
+            y += 46;
 
             Label lblNote = new Label();
             lblNote.ForeColor = SystemColors.GrayText;
@@ -103,6 +111,7 @@ namespace AgentDockStandalone {
             txtFolder.Text      = strFolder;
             txtCommand.Text     = strCommand;
             chkHideBars.Checked = cDockSettings.HidePaneTitleBars;
+            chkAdmin.Checked    = cDockSettings.AllowAdminPanes;
             mblnPlainBat        = blnPlain;
         }
 
@@ -141,7 +150,7 @@ namespace AgentDockStandalone {
             }
             try {
                 cDockSettings.WritePaneBat(strFolder, strCommand);
-                cDockSettings.Save(chkHideBars.Checked);
+                cDockSettings.Save(chkHideBars.Checked, chkAdmin.Checked);
             } catch (Exception ex) {
                 MessageBox.Show(this, "Could not save the settings:\r\n\r\n" + ex.Message,
                     "Agent Dock Settings", MessageBoxButtons.OK, MessageBoxIcon.Warning);

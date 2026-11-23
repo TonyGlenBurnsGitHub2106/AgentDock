@@ -79,7 +79,7 @@ namespace AgentDockStandalone {
             mPanes.AddChord(Keys.N,     delegate { mnuAgentsNewAdminPane.PerformClick(); });
             mPanes.AddChord(Keys.A,     delegate { mnuAgentsAbsorbAll.PerformClick(); });
             mPanes.AddBareKey(Keys.F1,  delegate { mnuHelpUsage.PerformClick(); });
-            mAdminSwap = new cAdminSwap(this, mstrCwd, SpawnAdminResume, delegate(string s) { this.tslStatus.Text = s; });
+            ApplyAdminSetting();
             UpdateStatus();
 
             // Drive any startup action from CLI flags. UI is otherwise idle.
@@ -602,6 +602,7 @@ namespace AgentDockStandalone {
 
         private void ShowSettings() {
             bool blnWasHidden = cDockSettings.HidePaneTitleBars;
+            bool blnWasAdmin  = cDockSettings.AllowAdminPanes;
             using (fSettings dlg = new fSettings(mstrBatPath)) {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
             }
@@ -614,6 +615,11 @@ namespace AgentDockStandalone {
                 if (mPanes != null) mPanes.ReTile();
             }
             this.tslStatus.Text = "Settings saved.";
+            bool blnAdmin = cDockSettings.AllowAdminPanes;
+            if (blnAdmin != blnWasAdmin) {
+                ApplyAdminSetting();
+                OfferRestartForAdminSetting(blnAdmin);
+            }
         }
 
         // Settings -> Update Agent Dock (Story 6817). The exe cannot be replaced while it runs, so
@@ -657,8 +663,12 @@ namespace AgentDockStandalone {
                 return;
             }
 
-            // Release every pane alive (as Unparent All does), then close without the
-            // terminate prompt -- there is nothing left to terminate.
+            ReleaseAllPanesAndClose();
+        }
+
+        // Every pane goes to the desktop alive (as Unparent All does), then the dock closes
+        // without the terminate prompt -- there is nothing left to terminate.
+        private void ReleaseAllPanesAndClose() {
             List<fAgentAbsorbedTerminal> lst = new List<fAgentAbsorbedTerminal>();
             foreach (Form f in this.MdiChildren) {
                 fAgentAbsorbedTerminal abs = f as fAgentAbsorbedTerminal;
@@ -671,6 +681,51 @@ namespace AgentDockStandalone {
             }
             mblnTerminateOnClose = true;
             this.Close();
+        }
+
+        // Settings -> "Allow administrator panes" (Story 6817, default off). Off: no admin pane
+        // menu item, and Become admin requests are not watched. On: both work; the dock itself was
+        // restarted as administrator at startup (Program.Run).
+        private void ApplyAdminSetting() {
+            bool blnAllow = cDockSettings.AllowAdminPanes;
+            mnuAgentsNewAdminPane.Enabled = blnAllow;
+            mnuAgentsNewAdminPane.ToolTipText = blnAllow
+                ? "Open one more pane running as administrator."
+                : "Off. Turn on Settings -> Agent Dock Settings -> Allow administrator panes.";
+            if (blnAllow && mAdminSwap == null) {
+                mAdminSwap = new cAdminSwap(this, mstrCwd, SpawnAdminResume, delegate(string s) { this.tslStatus.Text = s; });
+            } else if (!blnAllow && mAdminSwap != null) {
+                mAdminSwap.Dispose();
+                mAdminSwap = null;
+            }
+        }
+
+        // After the admin setting changes: offer to restart the dock at the new level now. The
+        // new dock waits for this one to close, then takes the panes back (--absorb).
+        private void OfferRestartForAdminSetting(bool ablnAdmin) {
+            bool blnElevated = IsRunningElevated();
+            if (ablnAdmin == blnElevated) return;   // already running the way the setting asks
+            int intPanes = (this.MdiChildren == null) ? 0 : this.MdiChildren.Length;
+            DialogResult dr = MessageBox.Show(this,
+                (ablnAdmin
+                    ? "Administrator panes are now allowed. The dock has to restart as administrator for them (Windows will ask)."
+                    : "Administrator panes are now off. The dock has to restart with normal rights.")
+                + "\r\n\r\nRestart the dock now?"
+                + (intPanes > 0 ? "\r\n\r\nYour open panes keep running and come back into the restarted dock." : "")
+                + "\r\n\r\nNo: it takes effect the next time the dock starts.",
+                "Agent Dock", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+            if (dr != DialogResult.Yes) return;
+            string strArgs = (RelaunchArgs(intPanes > 0) + " --wait-pid " + Process.GetCurrentProcess().Id).Trim();
+            try {
+                // From an elevated dock a normal start goes through Explorer, so it really is normal.
+                cPaneLauncher.Start(Application.ExecutablePath, strArgs, ablnAdmin);
+            } catch (Exception ex) {
+                MessageBox.Show(this, "The dock was not restarted:\r\n\r\n" + ex.Message
+                    + "\r\n\r\nThe setting takes effect the next time the dock starts.",
+                    "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            ReleaseAllPanesAndClose();
         }
 
         // The restarted dock gets the same --bat / --cwd this one was started with, plus
@@ -874,7 +929,7 @@ namespace AgentDockStandalone {
               + (strBuild.Length > 0 ? ("Built " + strBuild + "\r\n") : "")
               + "\r\n"
               + "Holds several AI agent terminals in one window.\r\n\r\n"
-              + ".NET Framework 4.8. Runs as administrator when it can.\r\n"
+              + ".NET Framework 4.8. Runs as administrator only when Settings allows administrator panes.\r\n"
               + "Normal panes start with normal rights; admin panes say [ADMIN].\r\n\r\n"
               + "Press F1 or Help -> Usage for the menu reference.";
 

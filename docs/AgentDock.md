@@ -48,9 +48,11 @@ starts out running GitHub Copilot CLI (`copilot`) in your profile folder.
 | Agent command | What each new pane runs, for example `copilot` or `claude`. |
 | Start folder | Where each new pane starts. **Browse...** picks it. |
 | Hide the title bar on each pane | On (the default): panes have no title bar, just a thin frame, so the terminal gets one more row. Off: each pane has its own title bar with a close button and an Undock menu. |
+| Allow administrator panes | Off (the default): the dock and every pane run with normal rights, and Windows never asks. On: the dock runs as administrator (Windows asks when it starts), so admin panes can open inside it. See **Admin panes**. |
 
 **OK** saves, **Cancel** or Escape changes nothing. New panes use the new command and folder.
-The title bar change shows on open panes at once.
+The title bar change shows on open panes at once. Changing **Allow administrator panes** offers
+to restart the dock right away; your open panes keep running and come back in.
 
 **Settings -> Open Config Folder** opens the folder holding the settings in Explorer.
 
@@ -77,7 +79,7 @@ also run `update.cmd` by hand with the dock closed.
 |---|---|---|
 | Spawn 1 / 2 / 3 / 4 Panes | | Brings the number of panes **up to** that many. Terminals already open on the desktop are taken in first, then new panes are started for the rest. |
 | Spawn Additional Pane | Ctrl+N | Always adds one new pane, however many there are. |
-| Spawn Additional Admin Pane | Ctrl+Shift+N | One new pane running as administrator. See **Admin panes** below. |
+| Spawn Additional Admin Pane | Ctrl+Shift+N | One new pane running as administrator. Only with **Allow administrator panes** on. See **Admin panes** below. |
 | Spawn Unparented Pane | Ctrl+U | Starts one more terminal the same way as a pane (same agent, same folder) but leaves it on the desktop. |
 | Absorb All Running Terminals | Ctrl+Shift+A | Pulls every open Windows Terminal window into the dock. |
 | Unparent Active Pane | Ctrl+Shift+U | Sends the pane you last clicked out to the desktop, still running. The rest re-tile. |
@@ -110,18 +112,17 @@ reach your agent while the dock is in front.
 
 ## Admin panes
 
-Windows does not let a normal program take in a window running as administrator. So:
+**Off by default.** Out of the box the dock and every pane run with normal rights, Windows never
+asks, and **Spawn Additional Admin Pane** is grayed out. That is the safer way to run it.
 
-- When you start the dock, Windows asks whether it may run as administrator (if your account
-  can). Say yes, and admin panes dock like any other. Regular panes still start with normal
-  rights.
-- If the dock runs without administrator rights (or your account has none), **Spawn Additional
-  Admin Pane** explains this and can open the admin terminal as a separate window instead.
+To use admin panes, turn on **Settings -> Agent Dock Settings -> Allow administrator panes**.
+The dock then runs as administrator (Windows asks each time it starts; say No and it runs
+normally), because Windows does not let a normal program take in a window running as
+administrator. Regular panes still start with normal rights. Admin panes show `[ADMIN]` in their
+title.
 
-Admin panes show `[ADMIN]` in their title.
-
-**Become admin** (Claude Code only): a pane can ask the dock to reopen its conversation as an
-admin pane. The dock asks you first. Other agents cannot do this yet.
+**Become admin** (Claude Code only, and only with the setting on): a pane can ask the dock to
+reopen its conversation as an admin pane. The dock asks you first. Other agents cannot do this yet.
 
 ---
 
