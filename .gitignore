@@ -5,3 +5,7 @@ bin/
 obj/
 *.user
 .vs/
+
+# This machine's settings: config\pane.bat is the command a new pane runs.
+# Made from samples\Copilot.bat on first run. Never committed.
+config/

@@ -25,10 +25,12 @@ the C# compiler that ships inside Windows and writes `bin\AgentDockStandalone.ex
 With Visual Studio you can instead open `AgentDockStandalone.csproj`, or run
 `MSBuild.exe AgentDockStandalone.csproj -p:Configuration=Release` (output in `bin\Release\`).
 
-## A pane batch file
+## The config folder
 
-Each pane runs one batch file. `samples\Copilot.bat` starts GitHub Copilot CLI in your
-profile folder. Copy it, change the folder, and pass it with `--bat`.
+Each new pane runs one batch file: `config\pane.bat`. The `config` folder belongs to this
+machine and is never committed. On the first run the dock copies `samples\Copilot.bat`
+there, which starts GitHub Copilot CLI in your profile folder. Edit `config\pane.bat` to
+change the folder or run a different agent. `--bat <file>` on the command line overrides it.
 
 ## Status
 

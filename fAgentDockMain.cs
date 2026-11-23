@@ -210,7 +210,9 @@ namespace AgentDockStandalone {
         private void SpawnPane(bool ablnAdmin, string astrCommand, bool ablnUnparented) {
             if (astrCommand == null && !File.Exists(mstrBatPath)) {
                 MessageBox.Show(this,
-                    "Claude-Code2.bat not found at:\r\n\r\n" + mstrBatPath,
+                    "The pane batch file was not found at:\r\n\r\n" + mstrBatPath
+                    + "\r\n\r\nPut the command a new pane should run in config\\pane.bat "
+                    + "(see samples\\Copilot.bat), or start the dock with --bat <file>.",
                     "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }

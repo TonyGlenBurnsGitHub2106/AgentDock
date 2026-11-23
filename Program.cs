@@ -47,19 +47,53 @@ namespace AgentDockStandalone {
             Application.Run(new fAgentDockMain(intSpawn, blnAbsorb, strBat, strCwd));
         }
 
-        // Default bat lives in C:\Tony\Batches alongside this exe's normal home.
-        // If a bat sits beside the exe we prefer that (portable install). Then we
-        // fall back to the well-known C:\Tony\Batches path.
+        // The command a new pane runs (Story 6817): config\pane.bat. The config folder is
+        // git-ignored, so each machine keeps its own. It is looked for beside the exe and up to
+        // two folders above it (the exe sits in bin\ or bin\Release\ under the repo root).
+        // When the repo has no config\pane.bat yet but has samples\Copilot.bat, the sample is
+        // copied in, so the first run just works. --bat on the command line still wins.
+        public const string CNST_CONFIG_FOLDER = "config";
+        public const string CNST_PANE_BAT      = "pane.bat";
+        private const string CNST_SAMPLE_BAT   = @"samples\Copilot.bat";
+        private const int    CNST_LEVELS_UP    = 2;
+
         private static string DefaultBatPath() {
+            string strRoot = FindRepoRoot();
+            if (strRoot == null) {
+                string strExeDir = ExeDir();
+                return Path.Combine(Path.Combine(strExeDir ?? "", CNST_CONFIG_FOLDER), CNST_PANE_BAT);
+            }
+            string strConfigBat = Path.Combine(Path.Combine(strRoot, CNST_CONFIG_FOLDER), CNST_PANE_BAT);
+            if (!File.Exists(strConfigBat)) {
+                string strSample = Path.Combine(strRoot, CNST_SAMPLE_BAT);
+                try {
+                    if (File.Exists(strSample)) {
+                        Directory.CreateDirectory(Path.GetDirectoryName(strConfigBat));
+                        File.Copy(strSample, strConfigBat, false);
+                    }
+                } catch { }
+            }
+            return strConfigBat;   // returned even if missing -- New Pane says where it looked
+        }
+
+        // The folder holding config\pane.bat, or else the one holding samples\, searching the
+        // exe's folder and up to CNST_LEVELS_UP parents. Null when neither is found.
+        private static string FindRepoRoot() {
+            string strDir = ExeDir();
+            string strSampleRoot = null;
+            for (int i = 0; i <= CNST_LEVELS_UP && !String.IsNullOrEmpty(strDir); i++) {
+                if (File.Exists(Path.Combine(Path.Combine(strDir, CNST_CONFIG_FOLDER), CNST_PANE_BAT))) return strDir;
+                if (strSampleRoot == null && File.Exists(Path.Combine(strDir, CNST_SAMPLE_BAT))) strSampleRoot = strDir;
+                DirectoryInfo diParent = Directory.GetParent(strDir);
+                strDir = diParent == null ? null : diParent.FullName;
+            }
+            return strSampleRoot;
+        }
+
+        private static string ExeDir() {
             try {
-                string strExeDir = Path.GetDirectoryName(
-                    System.Reflection.Assembly.GetExecutingAssembly().Location);
-                string strBeside = Path.Combine(strExeDir, "Claude-Code2.bat");
-                if (File.Exists(strBeside)) return strBeside;
-            } catch { }
-            string strWellKnown = @"C:\Tony\Batches\Claude-Code2.bat";
-            if (File.Exists(strWellKnown)) return strWellKnown;
-            return strWellKnown;   // return the well-known path even if missing -- UI surfaces the error
+                return Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            } catch { return null; }
         }
 
         private static string DefaultCwd() {
@@ -80,8 +114,8 @@ namespace AgentDockStandalone {
                 + "  AgentDockStandalone.exe --absorb              Absorb running WT windows.\r\n"
                 + "  AgentDockStandalone.exe --bat <path>          Use a different bat.\r\n"
                 + "  AgentDockStandalone.exe --cwd <path>          Override working dir.\r\n\r\n"
-                + "Default bat: C:\\Tony\\Batches\\Claude-Code2.bat\r\n"
-                + "Default cwd: C:\\Tony\\Dev\\Dot_Net\\Source",
+                + "Default bat: config\\pane.bat (copied from samples\\Copilot.bat on first run)\r\n"
+                + "Default cwd: C:\\Tony\\Dev\\Dot_Net\\Source, else your profile folder",
                 "AgentDockStandalone",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);

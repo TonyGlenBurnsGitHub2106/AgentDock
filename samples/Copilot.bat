@@ -1,6 +1,6 @@
 @echo off
-rem Sample pane batch for GitHub Copilot CLI. Each new pane in the dock runs this file.
-rem Change the folder to where you want the agent to start, then start the dock with:
-rem   AgentDockStandalone.exe --bat "<full path to this file>"
+rem Sample pane batch for GitHub Copilot CLI. On the first run the dock copies this file to
+rem config\pane.bat, and every new pane runs that copy. Edit config\pane.bat, not this file:
+rem change the folder below to where you want the agent to start.
 cd /d "%USERPROFILE%"
 copilot
