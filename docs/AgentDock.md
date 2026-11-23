@@ -125,7 +125,8 @@ Ctrl+C, Ctrl+V, Ctrl+Z.
 - **Shift+Enter** starts a new line. A prompt with several lines reaches the agent as one prompt.
 - **Up** on the first line brings back earlier prompts, newest first. **Down** goes forward again,
   back to what you were writing.
-- Under **Send** it says which pane the prompt goes to. Click inside another pane to change it.
+- **Send to**, under **Send**, lists the panes and shows which one the prompt goes to. It follows
+  the pane you click in. Pick a different pane in the list to send there instead.
 - You can still type in the terminals directly. The answers show in the panes as always.
 
 If a prompt cannot be sent, it stays in the box and the status bar says why. A pane running as
