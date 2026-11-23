@@ -20,10 +20,12 @@ namespace AgentDockStandalone {
         public const string KEY_HIDE_PANE_TITLE_BARS = "HidePaneTitleBars";
         private const bool  DEFAULT_HIDE_PANE_TITLE_BARS = true;
 
-        // Allow administrator panes: the dock runs as administrator (Windows asks when it starts)
-        // so admin panes dock inside it. Off by default: everything runs with normal rights.
-        public const string KEY_ALLOW_ADMIN_PANES = "AllowAdminPanes";
-        private const bool  DEFAULT_ALLOW_ADMIN_PANES = false;
+        // Start the dock as administrator (Windows asks when it starts), so admin panes dock
+        // inside it with no restart. Off by default: the dock starts with normal rights and
+        // restarts as administrator only when an admin pane is asked for. Panes are never admin
+        // unless one is asked for, either way.
+        public const string KEY_START_AS_ADMIN = "StartAsAdministrator";
+        private const bool  DEFAULT_START_AS_ADMIN = false;
 
         private static readonly Dictionary<string, string> mdicValues =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -39,8 +41,8 @@ namespace AgentDockStandalone {
             get { return ReadBool(KEY_HIDE_PANE_TITLE_BARS, DEFAULT_HIDE_PANE_TITLE_BARS); }
         }
 
-        public static bool AllowAdminPanes {
-            get { return ReadBool(KEY_ALLOW_ADMIN_PANES, DEFAULT_ALLOW_ADMIN_PANES); }
+        public static bool StartAsAdministrator {
+            get { return ReadBool(KEY_START_AS_ADMIN, DEFAULT_START_AS_ADMIN); }
         }
 
         // Reads config\agentdock.ini from the config folder, writing the defaults first when it
@@ -53,7 +55,7 @@ namespace AgentDockStandalone {
             try {
                 if (!File.Exists(strFile)) {
                     Directory.CreateDirectory(astrConfigFolder);
-                    File.WriteAllText(strFile, FileText(DEFAULT_HIDE_PANE_TITLE_BARS, DEFAULT_ALLOW_ADMIN_PANES));
+                    File.WriteAllText(strFile, FileText(DEFAULT_HIDE_PANE_TITLE_BARS, DEFAULT_START_AS_ADMIN));
                 }
                 foreach (string strRaw in File.ReadAllLines(strFile)) {
                     string strLine = strRaw.Trim();
@@ -66,12 +68,12 @@ namespace AgentDockStandalone {
         }
 
         // Writes agentdock.ini with the given values. Throws when the file cannot be written.
-        public static void Save(bool ablnHidePaneTitleBars, bool ablnAllowAdminPanes) {
+        public static void Save(bool ablnHidePaneTitleBars, bool ablnStartAsAdmin) {
             if (String.IsNullOrEmpty(mstrConfigFolder)) throw new InvalidOperationException("No config folder was found.");
             Directory.CreateDirectory(mstrConfigFolder);
-            File.WriteAllText(Path.Combine(mstrConfigFolder, CNST_FILE), FileText(ablnHidePaneTitleBars, ablnAllowAdminPanes));
+            File.WriteAllText(Path.Combine(mstrConfigFolder, CNST_FILE), FileText(ablnHidePaneTitleBars, ablnStartAsAdmin));
             mdicValues[KEY_HIDE_PANE_TITLE_BARS] = ablnHidePaneTitleBars ? "true" : "false";
-            mdicValues[KEY_ALLOW_ADMIN_PANES]    = ablnAllowAdminPanes   ? "true" : "false";
+            mdicValues[KEY_START_AS_ADMIN]    = ablnStartAsAdmin   ? "true" : "false";
         }
 
         // ---------------------------------------------------------------- pane.bat
@@ -136,7 +138,7 @@ namespace AgentDockStandalone {
             return ablnDefault;
         }
 
-        private static string FileText(bool ablnHidePaneTitleBars, bool ablnAllowAdminPanes) {
+        private static string FileText(bool ablnHidePaneTitleBars, bool ablnStartAsAdmin) {
             return "# Agent Dock settings for this machine. Lines are Name = value; # starts a comment.\r\n"
                  + "# Easiest: change them in the dock with Settings -> Agent Dock Settings.\r\n"
                  + "# The command a new pane runs, and its start folder, are in pane.bat beside this file.\r\n"
@@ -146,10 +148,10 @@ namespace AgentDockStandalone {
                  + "# false: each pane keeps its own title bar (close button, Undock on its menu).\r\n"
                  + KEY_HIDE_PANE_TITLE_BARS + " = " + (ablnHidePaneTitleBars ? "true" : "false") + "\r\n"
                  + "\r\n"
-                 + "# false (the default): the dock and every pane run with normal rights. No admin panes.\r\n"
-                 + "# true: the dock runs as administrator (Windows asks when it starts), so admin panes\r\n"
-                 + "#   (Agents -> Spawn Additional Admin Pane, Become admin) open inside it. Normal panes stay normal.\r\n"
-                 + KEY_ALLOW_ADMIN_PANES + " = " + (ablnAllowAdminPanes ? "true" : "false") + "\r\n";
+                 + "# false (the default): the dock starts with normal rights. Asking for an admin pane offers\r\n"
+                 + "#   to restart the dock as administrator first. Panes are never admin unless you ask.\r\n"
+                 + "# true: the dock starts as administrator (Windows asks), so admin panes open with no restart.\r\n"
+                 + KEY_START_AS_ADMIN + " = " + (ablnStartAsAdmin ? "true" : "false") + "\r\n";
         }
     }
 }

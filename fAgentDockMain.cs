@@ -88,6 +88,12 @@ namespace AgentDockStandalone {
             } else if (mblnInitialAbsorb) {
                 AbsorbAllRunning();
             }
+            // Restarted as administrator to open an admin pane (Story 6817): open it now.
+            if (Program.SpawnAdminOnStart && IsRunningElevated()) {
+                SpawnPane(true);
+                ReTileIfMultiple();
+                UpdateStatus();
+            }
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e) {
@@ -517,6 +523,27 @@ namespace AgentDockStandalone {
         // terminal, so on a medium-integrity AgentDock the admin pane lives
         // as a free-floating desktop window.
         private void mnuAgentsNewAdminPane_Click(object sender, EventArgs e) {
+            // Story 6817: the dock usually runs with normal rights, and Windows will not let it take
+            // in an admin window. So it offers to restart itself as administrator first.
+            if (!IsRunningElevated()) {
+                DialogResult dr = MessageBox.Show(this,
+                    "An admin pane can sit inside the dock only while the dock runs as administrator.\r\n\r\n"
+                    + "Yes: restart the dock as administrator (Windows will ask), then open the admin pane in it."
+                    + ((this.MdiChildren != null && this.MdiChildren.Length > 0)
+                        ? " Your open panes keep running and come back in." : "") + "\r\n"
+                    + "No: open the admin pane as a separate window.\r\n"
+                    + "Cancel: no admin pane.",
+                    "Agent Dock", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button1);
+                if (dr == DialogResult.Cancel) return;
+                if (dr == DialogResult.Yes) {
+                    // Declined at Windows' prompt: stop there, rather than prompting again.
+                    RestartDock(true, Program.CNST_ARG_SPAWN_ADMIN);
+                    return;
+                }
+                SpawnPane(true, null, true);   // admin, left on the desktop (no second prompt)
+                return;
+            }
             SpawnPane(true);
             ReTileIfMultiple();
             UpdateStatus();
@@ -602,7 +629,7 @@ namespace AgentDockStandalone {
 
         private void ShowSettings() {
             bool blnWasHidden = cDockSettings.HidePaneTitleBars;
-            bool blnWasAdmin  = cDockSettings.AllowAdminPanes;
+            bool blnWasAdmin  = cDockSettings.StartAsAdministrator;
             using (fSettings dlg = new fSettings(mstrBatPath)) {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
             }
@@ -615,7 +642,7 @@ namespace AgentDockStandalone {
                 if (mPanes != null) mPanes.ReTile();
             }
             this.tslStatus.Text = "Settings saved.";
-            bool blnAdmin = cDockSettings.AllowAdminPanes;
+            bool blnAdmin = cDockSettings.StartAsAdministrator;
             if (blnAdmin != blnWasAdmin) {
                 ApplyAdminSetting();
                 OfferRestartForAdminSetting(blnAdmin);
@@ -683,49 +710,47 @@ namespace AgentDockStandalone {
             this.Close();
         }
 
-        // Settings -> "Allow administrator panes" (Story 6817, default off). Off: no admin pane
-        // menu item, and Become admin requests are not watched. On: both work; the dock itself was
-        // restarted as administrator at startup (Program.Run).
+        // Become admin requests are always watched (Story 6817): admin panes are always available,
+        // they are just never the default. Called once at load.
         private void ApplyAdminSetting() {
-            bool blnAllow = cDockSettings.AllowAdminPanes;
-            mnuAgentsNewAdminPane.Enabled = blnAllow;
-            mnuAgentsNewAdminPane.ToolTipText = blnAllow
-                ? "Open one more pane running as administrator."
-                : "Off. Turn on Settings -> Agent Dock Settings -> Allow administrator panes.";
-            if (blnAllow && mAdminSwap == null) {
+            if (mAdminSwap == null) {
                 mAdminSwap = new cAdminSwap(this, mstrCwd, SpawnAdminResume, delegate(string s) { this.tslStatus.Text = s; });
-            } else if (!blnAllow && mAdminSwap != null) {
-                mAdminSwap.Dispose();
-                mAdminSwap = null;
             }
         }
 
-        // After the admin setting changes: offer to restart the dock at the new level now. The
-        // new dock waits for this one to close, then takes the panes back (--absorb).
+        // After "Start the dock as administrator" changes: offer to restart at the new level now.
         private void OfferRestartForAdminSetting(bool ablnAdmin) {
-            bool blnElevated = IsRunningElevated();
-            if (ablnAdmin == blnElevated) return;   // already running the way the setting asks
+            if (ablnAdmin == IsRunningElevated()) return;   // already running the way the setting asks
             int intPanes = (this.MdiChildren == null) ? 0 : this.MdiChildren.Length;
             DialogResult dr = MessageBox.Show(this,
                 (ablnAdmin
-                    ? "Administrator panes are now allowed. The dock has to restart as administrator for them (Windows will ask)."
-                    : "Administrator panes are now off. The dock has to restart with normal rights.")
-                + "\r\n\r\nRestart the dock now?"
+                    ? "The dock will now start as administrator. Restart it as administrator now (Windows will ask)?"
+                    : "The dock will now start with normal rights. Restart it with normal rights now?")
                 + (intPanes > 0 ? "\r\n\r\nYour open panes keep running and come back into the restarted dock." : "")
                 + "\r\n\r\nNo: it takes effect the next time the dock starts.",
                 "Agent Dock", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
             if (dr != DialogResult.Yes) return;
-            string strArgs = (RelaunchArgs(intPanes > 0) + " --wait-pid " + Process.GetCurrentProcess().Id).Trim();
+            RestartDock(ablnAdmin, null);
+        }
+
+        // Restarts the dock at the given level. Open panes go to the desktop alive; the new dock
+        // waits for this one to close, then takes them back (--absorb). astrExtra: more arguments
+        // for the new dock, such as --spawn-admin. False when the restart did not happen (Windows'
+        // prompt declined), and this dock stays as it was.
+        private bool RestartDock(bool ablnAdmin, string astrExtra) {
+            int intPanes = (this.MdiChildren == null) ? 0 : this.MdiChildren.Length;
+            string strArgs = (RelaunchArgs(intPanes > 0) + " --wait-pid " + Process.GetCurrentProcess().Id
+                              + (String.IsNullOrEmpty(astrExtra) ? "" : " " + astrExtra)).Trim();
             try {
                 // From an elevated dock a normal start goes through Explorer, so it really is normal.
                 cPaneLauncher.Start(Application.ExecutablePath, strArgs, ablnAdmin);
             } catch (Exception ex) {
-                MessageBox.Show(this, "The dock was not restarted:\r\n\r\n" + ex.Message
-                    + "\r\n\r\nThe setting takes effect the next time the dock starts.",
+                MessageBox.Show(this, "The dock was not restarted:\r\n\r\n" + ex.Message,
                     "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                return false;
             }
             ReleaseAllPanesAndClose();
+            return true;
         }
 
         // The restarted dock gets the same --bat / --cwd this one was started with, plus
@@ -930,7 +955,7 @@ namespace AgentDockStandalone {
               + "\r\n"
               + "Holds several AI agent terminals in one window.\r\n\r\n"
               + "Running now: " + (IsRunningElevated() ? "as administrator" : "with normal rights") + ".\r\n"
-              + "Administrator panes: " + (cDockSettings.AllowAdminPanes ? "allowed" : "off") + " (Settings -> Agent Dock Settings).\r\n"
+              + "Starts as administrator: " + (cDockSettings.StartAsAdministrator ? "yes" : "no") + " (Settings -> Agent Dock Settings).\r\n"
               + "Normal panes always start with normal rights. Admin panes say [ADMIN].\r\n\r\n"
               + ".NET Framework 4.8.\r\n\r\n"
               + "Press F1 or Help -> Usage for the menu reference.";

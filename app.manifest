@@ -4,9 +4,9 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Story 6817: the dock starts with normal rights. Only when Settings -> "Allow administrator
-             panes" is on does it restart itself as administrator (Program.Run), so admin panes can
-             dock inside it. Normal panes always start with normal rights (cPaneLauncher). -->
+        <!-- Story 6817: the dock starts with normal rights. It restarts itself as administrator when
+             Settings -> "Start the dock as administrator" is on (Program.Run), or when an admin pane
+             is asked for. Normal panes always start with normal rights (cPaneLauncher). -->
         <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>

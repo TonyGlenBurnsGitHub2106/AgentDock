@@ -66,7 +66,7 @@ namespace AgentDockStandalone {
             this.Controls.Add(chkHideBars);
             y += 28;
 
-            chkAdmin.Text = "Allow administrator panes (the dock then runs as administrator, and Windows asks when it starts)";
+            chkAdmin.Text = "Start the dock as administrator (Windows asks). Admin panes then open with no restart. Panes are never admin unless you ask for one.";
             chkAdmin.SetBounds(intLeft, y, intWidth, 36);
             chkAdmin.CheckAlign = ContentAlignment.TopLeft;
             chkAdmin.TextAlign  = ContentAlignment.TopLeft;
@@ -111,7 +111,7 @@ namespace AgentDockStandalone {
             txtFolder.Text      = strFolder;
             txtCommand.Text     = strCommand;
             chkHideBars.Checked = cDockSettings.HidePaneTitleBars;
-            chkAdmin.Checked    = cDockSettings.AllowAdminPanes;
+            chkAdmin.Checked    = cDockSettings.StartAsAdministrator;
             mblnPlainBat        = blnPlain;
         }
 

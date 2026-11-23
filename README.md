@@ -48,8 +48,9 @@ run. Each one has a comment saying what it does. Restart the dock after a change
 - `HidePaneTitleBars = true` (the default): panes have no title bar, so the terminal gets
   one more row. Close a pane with Agents -> Close Active Pane, and pop one out with
   Agents -> Unparent Active Pane. Set it to `false` to bring the title bars back.
-- `AllowAdminPanes = false` (the default): the dock and every pane run with normal rights.
-  `true`: the dock runs as administrator (Windows asks at start) so admin panes dock inside it.
+- `StartAsAdministrator = false` (the default): the dock starts with normal rights, and asking
+  for an admin pane offers to restart it as administrator. `true`: it starts as administrator
+  (Windows asks), so admin panes open with no restart. Panes are never admin unless asked for.
 
 ## Status
 

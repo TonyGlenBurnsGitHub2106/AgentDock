@@ -49,6 +49,8 @@ namespace AgentDockStandalone {
                     strBat = args[++i];
                 } else if ((a == "--cwd" || a == "-d") && i + 1 < args.Length) {
                     strCwd = args[++i];
+                } else if (a == CNST_ARG_SPAWN_ADMIN) {
+                    SpawnAdminOnStart = true;
                 } else if (a == "--wait-pid" && i + 1 < args.Length) {
                     int intPid;
                     if (Int32.TryParse(args[++i], out intPid)) WaitForExit(intPid);
@@ -58,11 +60,11 @@ namespace AgentDockStandalone {
                 }
             }
 
-            // Settings -> "Allow administrator panes" (Story 6817, default off). The dock starts
-            // with normal rights (app.manifest asInvoker). With the setting on, it restarts itself
-            // as administrator so admin panes can dock inside it. When Windows' prompt is
+            // Settings -> "Start the dock as administrator" (Story 6817, default off). The dock
+            // starts with normal rights (app.manifest asInvoker). With the setting on, it restarts
+            // itself as administrator so admin panes dock with no restart. When Windows' prompt is
             // declined, the dock carries on with normal rights.
-            if (cDockSettings.AllowAdminPanes && !AgentDockShared.cPaneLauncher.IsRunningElevated()) {
+            if (cDockSettings.StartAsAdministrator && !AgentDockShared.cPaneLauncher.IsRunningElevated()) {
                 if (RestartAsAdministrator(args)) return;
             }
 
@@ -101,6 +103,11 @@ namespace AgentDockStandalone {
             }
             return strConfigBat;   // returned even if missing -- New Pane says where it looked
         }
+
+        // --spawn-admin: open one admin pane once the dock is up. Passed by a dock that restarts
+        // itself as administrator for Agents -> Spawn Additional Admin Pane (Story 6817).
+        internal const string CNST_ARG_SPAWN_ADMIN = "--spawn-admin";
+        internal static bool SpawnAdminOnStart;
 
         // Starts this exe again as administrator with the same arguments. False when Windows'
         // prompt was declined or the start failed, so this copy should carry on.
