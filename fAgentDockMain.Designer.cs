@@ -155,14 +155,14 @@ namespace AgentDockStandalone {
             this.mnuAgentsSpawn4.Click       += new System.EventHandler(this.mnuAgentsSpawn4_Click);
 
             this.mnuAgentsNewPane.Name         = "mnuAgentsNewPane";
-            this.mnuAgentsNewPane.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.N)));
+            this.mnuAgentsNewPane.ShortcutKeyDisplayString = "Ctrl+N";   // caught by the keyboard hook (Story 6817)
             this.mnuAgentsNewPane.Size         = new System.Drawing.Size(260, 22);
             this.mnuAgentsNewPane.Text         = "&Spawn Additional Pane";
             this.mnuAgentsNewPane.ToolTipText  = "Add one more pane to the dock (current count + 1).";
             this.mnuAgentsNewPane.Click       += new System.EventHandler(this.mnuAgentsNewPane_Click);
 
             this.mnuAgentsNewAdminPane.Name         = "mnuAgentsNewAdminPane";
-            this.mnuAgentsNewAdminPane.ShortcutKeys = ((System.Windows.Forms.Keys)(((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift) | System.Windows.Forms.Keys.N)));
+            this.mnuAgentsNewAdminPane.ShortcutKeyDisplayString = "Ctrl+Shift+N";
             this.mnuAgentsNewAdminPane.Size         = new System.Drawing.Size(260, 22);
             this.mnuAgentsNewAdminPane.Text         = "Spawn Additional &Admin Pane";
             this.mnuAgentsNewAdminPane.ToolTipText  = "Add one elevated pane (UAC prompts). Title shows [ADMIN].";
@@ -172,14 +172,14 @@ namespace AgentDockStandalone {
             this.mnuAgentsSepA.Size = new System.Drawing.Size(257, 6);
 
             this.mnuAgentsAbsorbAll.Name         = "mnuAgentsAbsorbAll";
-            this.mnuAgentsAbsorbAll.ShortcutKeys = ((System.Windows.Forms.Keys)(((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift) | System.Windows.Forms.Keys.A)));
+            this.mnuAgentsAbsorbAll.ShortcutKeyDisplayString = "Ctrl+Shift+A";
             this.mnuAgentsAbsorbAll.Size         = new System.Drawing.Size(260, 22);
             this.mnuAgentsAbsorbAll.Text         = "&Absorb All Running Terminals";
             this.mnuAgentsAbsorbAll.ToolTipText  = "Pull every visible Windows Terminal window into the dock as an MDI child.";
             this.mnuAgentsAbsorbAll.Click       += new System.EventHandler(this.mnuAgentsAbsorbAll_Click);
 
             this.mnuAgentsNewUnparentedPane.Name         = "mnuAgentsNewUnparentedPane";
-            this.mnuAgentsNewUnparentedPane.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.U)));
+            this.mnuAgentsNewUnparentedPane.ShortcutKeyDisplayString = "Ctrl+U";
             this.mnuAgentsNewUnparentedPane.Size         = new System.Drawing.Size(260, 22);
             this.mnuAgentsNewUnparentedPane.Text         = "Spawn Un&parented Pane";
             this.mnuAgentsNewUnparentedPane.ToolTipText  = "Start one more Claude terminal the same way, but leave it on the desktop instead of in the dock.";
@@ -251,7 +251,7 @@ namespace AgentDockStandalone {
             this.mnuHelp.Text = "&Help";
 
             this.mnuHelpUsage.Name         = "mnuHelpUsage";
-            this.mnuHelpUsage.ShortcutKeys = System.Windows.Forms.Keys.F1;
+            this.mnuHelpUsage.ShortcutKeyDisplayString = "F1";
             this.mnuHelpUsage.Size         = new System.Drawing.Size(200, 22);
             this.mnuHelpUsage.Text         = "&Usage and Menu Reference";
             this.mnuHelpUsage.Click       += new System.EventHandler(this.mnuHelpUsage_Click);

@@ -24,6 +24,27 @@ namespace AgentDockStandalone {
         private const int CNST_SC_UNDOCK = 0x1000;
 
         private IntPtr mhwndAbsorbed = IntPtr.Zero;
+
+        // The frame around a pane with no title bar (Story 6817). 0 when title bars show.
+        private const int   CNST_FRAME_PX = 2;
+        private static readonly Color CNST_FRAME_IDLE   = Color.FromArgb(70, 70, 70);
+        private static readonly Color CNST_FRAME_ACTIVE = Color.FromArgb(0, 120, 215);
+        private int mintFrame;
+
+        // Blue on the pane the Agents menu acts on, gray on the rest. Called by the dock.
+        public void SetFrameActive(bool ablnActive) {
+            if (mintFrame == 0) return;
+            Color c = ablnActive ? CNST_FRAME_ACTIVE : CNST_FRAME_IDLE;
+            if (this.BackColor != c) this.BackColor = c;
+        }
+
+        // Sizes the terminal to fill the pane inside its frame, aintShrink pixels smaller.
+        private void PlaceAbsorbed(int aintShrink) {
+            if (mhwndAbsorbed == IntPtr.Zero || !Win32.IsWindow(mhwndAbsorbed)) return;
+            int w = Math.Max(1, this.ClientSize.Width  - 2 * mintFrame - aintShrink);
+            int h = Math.Max(1, this.ClientSize.Height - 2 * mintFrame - aintShrink);
+            Win32.MoveWindow(mhwndAbsorbed, mintFrame, mintFrame, w, h, true);
+        }
         private int    mintOriginalStyle;
         private int    mintOriginalExStyle;
         private bool   mblnStripped;
@@ -50,6 +71,10 @@ namespace AgentDockStandalone {
             if (cDockSettings.HidePaneTitleBars) {
                 this.FormBorderStyle = FormBorderStyle.None;
                 this.ControlBox      = false;
+                // With no title bar the panes ran together in one black sheet, so each gets a
+                // thin frame: gray, or blue on the pane the Agents menu acts on (SetFrameActive).
+                mintFrame      = CNST_FRAME_PX;
+                this.BackColor = CNST_FRAME_IDLE;
             }
         }
 
@@ -127,7 +152,7 @@ namespace AgentDockStandalone {
             mblnStripped = true;
 
             Win32.SetParent(mhwndAbsorbed, this.Handle);
-            Win32.MoveWindow(mhwndAbsorbed, 0, 0, this.ClientSize.Width, this.ClientSize.Height, true);
+            PlaceAbsorbed(0);
             Win32.ShowWindow(mhwndAbsorbed, Win32.SW_SHOWNORMAL);
             FocusAbsorbed();
             ScheduleLayoutNudge();
@@ -149,11 +174,9 @@ namespace AgentDockStandalone {
                 t.Dispose();
                 if (this.IsDisposed) return;
                 if (mhwndAbsorbed == IntPtr.Zero || !Win32.IsWindow(mhwndAbsorbed)) return;
-                int w = this.ClientSize.Width;
-                int h = this.ClientSize.Height;
-                if (w <= 1 || h <= 1) return;
-                Win32.MoveWindow(mhwndAbsorbed, 0, 0, w - 1, h - 1, true);
-                Win32.MoveWindow(mhwndAbsorbed, 0, 0, w,     h,     true);
+                if (this.ClientSize.Width <= 1 + 2 * mintFrame || this.ClientSize.Height <= 1 + 2 * mintFrame) return;
+                PlaceAbsorbed(1);
+                PlaceAbsorbed(0);
             };
             t.Start();
         }
@@ -186,8 +209,7 @@ namespace AgentDockStandalone {
         protected override void OnResize(EventArgs e) {
             base.OnResize(e);
             if (mhwndAbsorbed != IntPtr.Zero && Win32.IsWindow(mhwndAbsorbed)) {
-                Win32.MoveWindow(mhwndAbsorbed, 0, 0,
-                                 this.ClientSize.Width, this.ClientSize.Height, true);
+                PlaceAbsorbed(0);
             }
         }
 

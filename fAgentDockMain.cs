@@ -71,6 +71,13 @@ namespace AgentDockStandalone {
             mPanes.InstallKeyboardHook();
             // Ctrl+Shift+U works while a terminal has the keyboard (the arranger's hook).
             mPanes.AddChord(Keys.U, delegate { UnparentActivePane(); });
+            // The rest of the menu shortcuts go through the same hook (Story 6817), so they work
+            // while a terminal has the keyboard. The menu items show them as text only.
+            mPanes.AddCtrlChord(Keys.N, delegate { mnuAgentsNewPane.PerformClick(); });
+            mPanes.AddCtrlChord(Keys.U, delegate { mnuAgentsNewUnparentedPane.PerformClick(); });
+            mPanes.AddChord(Keys.N,     delegate { mnuAgentsNewAdminPane.PerformClick(); });
+            mPanes.AddChord(Keys.A,     delegate { mnuAgentsAbsorbAll.PerformClick(); });
+            mPanes.AddBareKey(Keys.F1,  delegate { mnuHelpUsage.PerformClick(); });
             mAdminSwap = new cAdminSwap(this, mstrCwd, SpawnAdminResume, delegate(string s) { this.tslStatus.Text = s; });
             UpdateStatus();
 
@@ -121,6 +128,8 @@ namespace AgentDockStandalone {
                     IntPtr clicked = Win32.WindowFromPoint(data.pt);
                     if (clicked != IntPtr.Zero) {
                         mPanes.NoteClick(clicked);
+                        // Never do UI work inside the hook -- repaint the frames afterwards.
+                        this.BeginInvoke(new Action(RefreshPaneFrames));
                         IntPtr root = Win32.GetAncestor(clicked, Win32.GA_ROOT);
                         if (root == this.Handle && Win32.GetForegroundWindow() != this.Handle) {
                             BringSelfForward();
@@ -426,6 +435,7 @@ namespace AgentDockStandalone {
             } else {
                 this.tslStatus.Text = intCount + " pane" + (intCount == 1 ? "" : "s") + " active";
             }
+            RefreshPaneFrames();
         }
 
         // -------------------------------------------------------------------
@@ -570,6 +580,17 @@ namespace AgentDockStandalone {
             mnuAgentsCloseActive.Click += delegate { CloseActivePane(); };
             int intAt = mnuAgents.DropDownItems.IndexOf(mnuAgentsUnparentActive);
             mnuAgents.DropDownItems.Insert(intAt + 1, mnuAgentsCloseActive);
+        }
+
+        // Blue frame on the pane the Agents menu acts on, gray on the rest (Story 6817; only
+        // when pane title bars are hidden -- a pane with a title bar has no frame).
+        private void RefreshPaneFrames() {
+            if (this.IsDisposed || mPanes == null) return;
+            Form current = mPanes.CurrentPane();
+            foreach (Form f in this.MdiChildren) {
+                fAgentAbsorbedTerminal abs = f as fAgentAbsorbedTerminal;
+                if (abs != null) abs.SetFrameActive(f == current);
+            }
         }
 
         private void CloseActivePane() {

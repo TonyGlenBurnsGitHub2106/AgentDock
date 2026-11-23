@@ -105,6 +105,21 @@ namespace AgentDockShared {
             mdicChords[(int)akey] = aact;
         }
 
+        // Ctrl+<key> (no Shift) and bare keys such as F1, caught by the same hook (Story 6817).
+        // As ordinary menu ShortcutKeys they never fired while a terminal had the keyboard,
+        // because the terminal's own window takes the key first. The same rule applies: show
+        // them on the menu as ShortcutKeyDisplayString only.
+        public void AddCtrlChord(Keys akey, Action aact) {
+            mdicCtrlChords[(int)akey] = aact;
+        }
+
+        public void AddBareKey(Keys akey, Action aact) {
+            mdicBareKeys[(int)akey] = aact;
+        }
+
+        private readonly Dictionary<int, Action> mdicCtrlChords = new Dictionary<int, Action>();
+        private readonly Dictionary<int, Action> mdicBareKeys   = new Dictionary<int, Action>();
+
         // Called from the dock's low-level mouse hook with the HWND under the click.
         public void NoteClick(IntPtr ahwndClicked) {
             if (ahwndClicked == IntPtr.Zero) return;
@@ -385,13 +400,21 @@ namespace AgentDockShared {
                 int msg = wParam.ToInt32();
                 if (nCode >= 0 && (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
                     && !mfrmHost.IsDisposed && GetForegroundWindow() == mfrmHost.Handle
-                    && Down(VK_CONTROL) && Down(VK_SHIFT) && !Down(VK_MENU)) {
+                    && !Down(VK_MENU)) {
                     KBDLLHOOKSTRUCT k = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT));
+                    bool blnCtrl  = Down(VK_CONTROL);
+                    bool blnShift = Down(VK_SHIFT);
                     Action act = null;
-                    if (k.vkCode == VK_LEFT)       act = delegate { MovePane(-1); };
-                    else if (k.vkCode == VK_RIGHT) act = delegate { MovePane(1); };
-                    else if (k.vkCode == VK_M)     act = delegate { ToggleMaximize(); };
-                    else mdicChords.TryGetValue(k.vkCode, out act);
+                    if (blnCtrl && blnShift) {
+                        if (k.vkCode == VK_LEFT)       act = delegate { MovePane(-1); };
+                        else if (k.vkCode == VK_RIGHT) act = delegate { MovePane(1); };
+                        else if (k.vkCode == VK_M)     act = delegate { ToggleMaximize(); };
+                        else mdicChords.TryGetValue(k.vkCode, out act);
+                    } else if (blnCtrl) {
+                        mdicCtrlChords.TryGetValue(k.vkCode, out act);
+                    } else if (!blnShift) {
+                        mdicBareKeys.TryGetValue(k.vkCode, out act);
+                    }
                     if (act != null) {
                         // Never do UI work inside the hook -- Windows times the callback out.
                         mfrmHost.BeginInvoke(act);
