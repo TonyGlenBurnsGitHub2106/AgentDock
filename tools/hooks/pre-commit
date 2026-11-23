@@ -1,0 +1,15 @@
+#!/bin/sh
+# Agent Dock (Story 6817): raise the last number of the version in AssemblyInfo.cs by one on
+# every commit, and stage the file so the new version goes into the same commit.
+# Turned on per clone with:  git config core.hooksPath tools/hooks   (tools\install-hooks.cmd)
+f="$(git rev-parse --show-toplevel)/AssemblyInfo.cs"
+[ -f "$f" ] || exit 0
+n=$(sed -n 's/.*AssemblyVersion("[0-9]*\.[0-9]*\.\([0-9]*\)").*/\1/p' "$f")
+case "$n" in
+  ''|*[!0-9]*) echo "pre-commit: no version found in AssemblyInfo.cs, not raised." >&2; exit 0 ;;
+esac
+new=$((n + 1))
+sed -i "s/\(Assembly\(File\)\{0,1\}Version(\"[0-9]*\.[0-9]*\.\)[0-9]*\")/\1$new\")/" "$f"
+git add "$f"
+echo "Agent Dock version build number: $n -> $new"
+exit 0

@@ -54,3 +54,7 @@ run. Each one has a comment saying what it does. Restart the dock after a change
 This is the starting copy of the dock, taken as is. The next steps are to turn the
 defaults for this one machine into settings, add profiles so any terminal agent can run
 in a pane, and publish a ready-built release.
+
+## Help and version
+
+Help -> Usage reads `docs\AgentDock.md` from this folder. The version (Help -> About) rises by one with every commit: run `tools\install-hooks.cmd` once in a clone where commits are made.

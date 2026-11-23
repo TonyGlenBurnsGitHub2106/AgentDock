@@ -825,60 +825,60 @@ namespace AgentDockStandalone {
         // -------------------------------------------------------------------
         // Help
 
-        // Help -> Usage. Loads the markdown from Leonardo's Help folder at
-        // runtime and shows it in a viewer. The standalone owns no embedded
-        // copy of the help -- Tony wants the help text to live with the rest
-        // of Leonardo's help topics so updates happen in one place.
-        private const string CNST_HELP_FILE =
-            @"C:\Tony\Dev\Dot_Net\Source\LeonardoConsolidated\Help\AgentDockStandalone.md";
+        // Help -> Usage (Story 6817): docs\AgentDock.md in the Agent Dock folder, so the help
+        // travels with the dock to any machine. It used to read a file on one machine only.
+        private const string CNST_HELP_RELATIVE = @"docs\AgentDock.md";
+
+        private static string HelpFilePath() {
+            string strRoot = Program.RepoRoot;
+            if (strRoot != null) return Path.Combine(strRoot, CNST_HELP_RELATIVE);
+            return Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), CNST_HELP_RELATIVE);
+        }
 
         private void mnuHelpUsage_Click(object sender, EventArgs e) {
+            string strFile = HelpFilePath();
             string strContent;
             try {
-                if (!System.IO.File.Exists(CNST_HELP_FILE)) {
+                if (!File.Exists(strFile)) {
                     MessageBox.Show(this,
-                        "Help file not found:\r\n\r\n" + CNST_HELP_FILE
-                        + "\r\n\r\nThe help topic lives in the Leonardo Help folder. "
-                        + "Verify the file is present at the expected path.",
-                        "AgentDockStandalone - Help",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        "The help file was not found:\r\n\r\n" + strFile
+                        + "\r\n\r\nIt comes with Agent Dock, in its docs folder. Get the newest "
+                        + "version (Settings -> Update Agent Dock) or download it again.",
+                        "Agent Dock - Help", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
-                strContent = System.IO.File.ReadAllText(CNST_HELP_FILE);
+                strContent = File.ReadAllText(strFile);
             } catch (Exception ex) {
                 MessageBox.Show(this,
-                    "Could not read help file:\r\n\r\n" + CNST_HELP_FILE
-                    + "\r\n\r\n" + ex.Message,
-                    "AgentDockStandalone - Help",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "Could not read the help file:\r\n\r\n" + strFile + "\r\n\r\n" + ex.Message,
+                    "Agent Dock - Help", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            using (fHelpViewer frm = new fHelpViewer("Help: AgentDockStandalone", strContent)) {
+            using (fHelpViewer frm = new fHelpViewer("Help: Agent Dock", strContent)) {
                 frm.ShowDialog(this);
             }
         }
 
         private void mnuHelpAbout_Click(object sender, EventArgs e) {
             System.Reflection.Assembly asm = System.Reflection.Assembly.GetExecutingAssembly();
-            string strVersion = asm.GetName().Version.ToString();
+            string strVersion = asm.GetName().Version.ToString(3);   // Major.Minor.Build -- Build rises with every commit (AssemblyInfo.cs)
             string strBuild   = "";
             try {
                 strBuild = System.IO.File.GetLastWriteTime(asm.Location).ToString("yyyy-MM-dd HH:mm");
             } catch { }
 
             string strMsg =
-                "AgentDockStandalone\r\n"
+                "Agent Dock\r\n"
               + "Version " + strVersion + "\r\n"
               + (strBuild.Length > 0 ? ("Built " + strBuild + "\r\n") : "")
               + "\r\n"
-              + "MDI host for parallel Claude Code sessions.\r\n"
-              + "Standalone - no Leonardo dependency.\r\n\r\n"
-              + ".NET Framework 4.8, runs as administrator, PerMonitorV2.\r\n"
+              + "Holds several AI agent terminals in one window.\r\n\r\n"
+              + ".NET Framework 4.8. Runs as administrator when it can.\r\n"
               + "Normal panes start with normal rights; admin panes say [ADMIN].\r\n\r\n"
               + "Press F1 or Help -> Usage for the menu reference.";
 
-            MessageBox.Show(this, strMsg, "About AgentDockStandalone",
+            MessageBox.Show(this, strMsg, "About Agent Dock",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
