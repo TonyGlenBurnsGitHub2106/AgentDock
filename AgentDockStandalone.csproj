@@ -68,6 +68,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.manifest" />
+    <EmbeddedResource Include="AgentDock.ico">
+      <LogicalName>AgentDockStandalone.AgentDock.ico</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

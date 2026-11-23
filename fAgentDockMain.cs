@@ -37,12 +37,25 @@ namespace AgentDockStandalone {
         // "Become admin": a pane asks, the dock reopens its conversation as an admin pane.
         private cAdminSwap mAdminSwap;
 
+        // The window's icon (Story 6817): AgentDock.ico, the Leonardo menu's Agent Dock robot,
+        // embedded in the exe as a resource and read from there. Reading it back out of the exe
+        // file (Icon.ExtractAssociatedIcon) showed the standard icon on the work machine -- it
+        // fails on some paths, such as a network share -- so that is only the fallback.
+        private const string CNST_ICON_RESOURCE = "AgentDockStandalone.AgentDock.ico";
+
+        private void LoadDockIcon() {
+            try {
+                using (Stream s = typeof(fAgentDockMain).Assembly.GetManifestResourceStream(CNST_ICON_RESOURCE)) {
+                    if (s != null) { this.Icon = new Icon(s); return; }
+                }
+            } catch { }
+            try { this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+        }
+
         public fAgentDockMain(int aintInitialSpawn, bool ablnInitialAbsorb,
                               string astrBatPath, string astrCwd) {
             InitializeComponent();
-            // The window and taskbar show the exe's own icon (AgentDock.ico, the Leonardo menu's
-            // Agent Dock robot), so the icon lives in one place: the build (Story 6817).
-            try { this.Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+            LoadDockIcon();
             mintInitialSpawn   = aintInitialSpawn;
             mblnInitialAbsorb  = ablnInitialAbsorb;
             mstrBatPath        = astrBatPath;

@@ -10,7 +10,7 @@ if not exist "%CSC%" (
   exit /b 1
 )
 if not exist bin mkdir bin
-"%CSC%" /nologo /target:winexe /optimize+ /out:bin\AgentDockStandalone.exe /win32manifest:app.manifest /win32icon:AgentDock.ico /r:System.Windows.Forms.dll /r:System.Drawing.dll *.cs
+"%CSC%" /nologo /target:winexe /optimize+ /out:bin\AgentDockStandalone.exe /win32manifest:app.manifest /win32icon:AgentDock.ico /resource:AgentDock.ico,AgentDockStandalone.AgentDock.ico /r:System.Windows.Forms.dll /r:System.Drawing.dll *.cs
 if errorlevel 1 (
   echo.
   echo Build FAILED.
