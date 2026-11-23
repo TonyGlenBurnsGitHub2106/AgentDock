@@ -156,6 +156,15 @@ namespace AgentDockStandalone {
             mblnStripped = true;
 
             Win32.SetParent(mhwndAbsorbed, this.Handle);
+            // Windows refuses when the terminal runs as administrator and the dock does not. The
+            // window stays on the desktop untouched, so close this pane instead of leaving it empty.
+            if (Win32.GetAncestor(mhwndAbsorbed, Win32.GA_ROOT) == mhwndAbsorbed) {
+                mblnStripped = false;
+                mblnRestored = true;
+                mhwndAbsorbed = IntPtr.Zero;
+                this.BeginInvoke(new MethodInvoker(delegate { if (!this.IsDisposed) this.Close(); }));
+                return;
+            }
             PlaceAbsorbed(0);
             Win32.ShowWindow(mhwndAbsorbed, Win32.SW_SHOWNORMAL);
             FocusAbsorbed();

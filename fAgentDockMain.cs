@@ -386,27 +386,58 @@ namespace AgentDockStandalone {
         // Absorb pipeline -- pull every visible CASCADIA_HOSTING_WINDOW_CLASS
 
         private void AbsorbAllRunning() {
-            int intAbsorbed = AbsorbAvailable(Int32.MaxValue);
+            List<string> lstAdmin;
+            int intAbsorbed = AbsorbAvailable(Int32.MaxValue, out lstAdmin);
+            if (intAbsorbed > 0) {
+                ReTileIfMultiple();
+                UpdateStatus();
+            }
+            // Windows does not let a dock without admin rights take in a terminal running as
+            // administrator: the window stays where it is and the pane would sit empty. So those
+            // are skipped, and the dock offers to restart as administrator to take them in.
+            if (lstAdmin.Count > 0) {
+                DialogResult dr = MessageBox.Show(this,
+                    (lstAdmin.Count == 1 ? "This terminal runs" : "These terminals run") + " as administrator:\r\n\r\n    "
+                    + String.Join("\r\n    ", lstAdmin.ToArray()) + "\r\n\r\n"
+                    + "The dock is not running as administrator, so Windows will not let it take "
+                    + (lstAdmin.Count == 1 ? "that window" : "those windows") + " in.\r\n\r\n"
+                    + "Restart the dock as administrator and take every terminal in? Your open panes keep running "
+                    + "and come back in. (Windows asks first.)",
+                    "Agent Dock", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1);
+                if (dr == DialogResult.Yes) RestartDock(true, "--absorb");
+                return;
+            }
             if (intAbsorbed == 0) {
                 MessageBox.Show(this,
                     "No Windows Terminal windows found to absorb.\r\n\r\n"
                     + "Open a Windows Terminal window (wt.exe) first, then try again.",
                     "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
             }
-            ReTileIfMultiple();
-            UpdateStatus();
+        }
+
+        private int AbsorbAvailable(int amaxCount) {
+            List<string> lstAdmin;
+            return AbsorbAvailable(amaxCount, out lstAdmin);
         }
 
         // Absorb up to amaxCount unabsorbed top-level WT windows. Skips any
-        // HWND already wrapped by an existing absorbed MDI child. Returns the
-        // number actually absorbed. Caller is responsible for re-tile / status.
-        private int AbsorbAvailable(int amaxCount) {
+        // HWND already wrapped by an existing absorbed MDI child, and (when the dock is not
+        // running as administrator) any terminal running as administrator, whose title goes in
+        // alstAdmin. Returns the number actually absorbed. Caller is responsible for re-tile / status.
+        private int AbsorbAvailable(int amaxCount, out List<string> alstAdmin) {
+            alstAdmin = new List<string>();
             if (amaxCount <= 0) return 0;
             HashSet<IntPtr> already = SnapshotAbsorbedHwnds();
+            bool blnDockAdmin = IsRunningElevated();
             int intCount = 0;
             foreach (IntPtr h in FindTerminalHwnds()) {
                 if (already.Contains(h)) continue;
+                if (!blnDockAdmin && IsWindowElevated(h)) {
+                    StringBuilder sbTitle = new StringBuilder(256);
+                    Win32.GetWindowText(h, sbTitle, sbTitle.Capacity);
+                    alstAdmin.Add(sbTitle.Length > 0 ? sbTitle.ToString() : "Windows Terminal");
+                    continue;
+                }
                 cTabColor.ColorExistingWindow(h);   // absorbed windows get a tab color too
                 fAgentAbsorbedTerminal frm = new fAgentAbsorbedTerminal(h);
                 frm.MdiParent   = this;
@@ -428,6 +459,41 @@ namespace AgentDockStandalone {
             }
             return set;
         }
+
+        // True when the window's process runs as administrator. A process this dock cannot even
+        // look at counts as administrator too, since the dock could not take its window in either.
+        private static bool IsWindowElevated(IntPtr ahwnd) {
+            uint intPid;
+            GetWindowThreadProcessId(ahwnd, out intPid);
+            if (intPid == 0) return false;
+            IntPtr hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, intPid);
+            if (hProc == IntPtr.Zero) return true;
+            try {
+                IntPtr hToken;
+                if (!OpenProcessToken(hProc, TOKEN_QUERY, out hToken)) return true;
+                try {
+                    int intElevated, intLen;
+                    if (!GetTokenInformation(hToken, TOKEN_ELEVATION_CLASS, out intElevated, 4, out intLen)) return true;
+                    return intElevated != 0;
+                } finally { CloseHandle(hToken); }
+            } finally { CloseHandle(hProc); }
+        }
+
+        private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+        private const uint TOKEN_QUERY                       = 0x0008;
+        private const int  TOKEN_ELEVATION_CLASS             = 20;   // TokenElevation
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowThreadProcessId")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool GetTokenInformation(IntPtr TokenHandle, int TokenInformationClass,
+            out int TokenInformation, int TokenInformationLength, out int ReturnLength);
+        [DllImport("kernel32.dll")]
+        private static extern bool CloseHandle(IntPtr hObject);
 
         private static List<IntPtr> FindTerminalHwnds() {
             List<IntPtr> lst = new List<IntPtr>();
