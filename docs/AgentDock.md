@@ -67,6 +67,13 @@ If anything goes wrong (git is not installed, the folder was downloaded as a ZIP
 cloned, or the build fails), the window says why and the dock you had starts again. You can
 also run `update.cmd` by hand with the dock closed.
 
+**Updating from outside the dock.** `tools\Update-RunningDock.ps1` does the same update with no
+question asked. It is there for an AI agent that has just changed the dock: it runs the script
+and the dock you are using brings itself up to date, panes and all. If no dock is running it only
+builds. If more than one is running it does nothing and says so. It waits while one of the dock's
+own dialogs is open. Docks older than 1.0.25 do not know the request, so update those once from
+the menu.
+
 ---
 
 ## Menu reference

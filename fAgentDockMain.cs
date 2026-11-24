@@ -832,7 +832,39 @@ namespace AgentDockStandalone {
         private const string CNST_UPDATE_SCRIPT = "update.cmd";
         private const string CNST_RELAUNCH_ENV  = "AGENTDOCK_RELAUNCH_ARGS";
 
-        private void UpdateAgentDock() {
+        // Update on request (Story 6826): tools\Update-RunningDock.ps1 posts this registered
+        // message to the dock's window, so an agent that has just pushed a dock change can bring
+        // the running dock up to date. It is the same update as the menu's, with no Yes / No.
+        // Allowed through to a dock running as administrator, since the script usually is not.
+        private const string CNST_UPDATE_MESSAGE = "AgentDock.UpdateNow";
+        private static readonly int WM_AGENTDOCK_UPDATE = RegisterWindowMessage(CNST_UPDATE_MESSAGE);
+        private const uint MSGFLT_ALLOW = 1;
+
+        protected override void OnHandleCreated(EventArgs e) {
+            base.OnHandleCreated(e);
+            if (WM_AGENTDOCK_UPDATE != 0)
+                ChangeWindowMessageFilterEx(this.Handle, (uint)WM_AGENTDOCK_UPDATE, MSGFLT_ALLOW, IntPtr.Zero);
+        }
+
+        protected override void WndProc(ref Message m) {
+            if (WM_AGENTDOCK_UPDATE != 0 && m.Msg == WM_AGENTDOCK_UPDATE) {
+                // Not while a dialog of the dock's is open: the script sees the dock still
+                // running and says so.
+                if (this.Enabled) this.BeginInvoke(new MethodInvoker(delegate { UpdateAgentDock(false); }));
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int RegisterWindowMessage(string lpString);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool ChangeWindowMessageFilterEx(IntPtr hwnd, uint msg, uint action, IntPtr pChangeFilterStruct);
+
+        private void UpdateAgentDock() { UpdateAgentDock(true); }
+
+        private void UpdateAgentDock(bool ablnAsk) {
             string strRoot   = Program.RepoRoot;
             string strScript = strRoot == null ? null : Path.Combine(strRoot, CNST_UPDATE_SCRIPT);
             if (strScript == null || !File.Exists(strScript)) {
@@ -841,7 +873,7 @@ namespace AgentDockStandalone {
                 return;
             }
             int intPanes = (this.MdiChildren == null) ? 0 : this.MdiChildren.Length;
-            DialogResult dr = MessageBox.Show(this,
+            DialogResult dr = !ablnAsk ? DialogResult.Yes : MessageBox.Show(this,
                 "Update Agent Dock?\r\n\r\n"
                 + "The dock closes, gets the newest version with git, builds it, and starts again. "
                 + "A window shows the progress.\r\n\r\n"
