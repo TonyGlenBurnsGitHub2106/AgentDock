@@ -171,7 +171,7 @@ namespace AgentDockStandalone {
         private IntPtr       mFocusHookId = IntPtr.Zero;
 
         // A third way, and the one that cannot fail (Story 6826): look at the mouse buttons 25 times
-        // a second, and when one goes down over a pane, that pane is the current one. Tony found
+        // a second, and when one goes down over a pane, that pane is the current one. Testing found
         // clicks inside a terminal still did not move the compose box's target with title bars
         // hidden (a title bar click did, through the focus hook), so the hook alone is not trusted.
         private readonly Timer mtmrClickPoll = new Timer();
