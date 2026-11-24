@@ -57,7 +57,11 @@ to restart the dock right away; your open panes keep running and come back in.
 
 **Settings -> Open Config Folder** opens the folder holding the settings in Explorer.
 
-**Settings -> Update Agent Dock** gets the newest version. The dock asks first, then:
+**Settings -> Show Compose Box** turns the compose box on or off in one click, no dialog. The tick
+shows whether it is on, and the dock remembers it.
+
+**Settings -> Update Agent Dock** gets the newest version. The dock asks first, and the question
+says which version you are on now. Then:
 
 1. Your open panes go to the desktop. Their sessions keep running.
 2. The dock closes, and a window shows the progress: it gets the newest code with git, then builds it.
@@ -107,7 +111,7 @@ there instead.
 - **Maximize / Restore Pane** (Ctrl+Shift+M): the pane you last clicked fills the dock. The same again puts the tiling back.
 
 ### Settings
-- **Agent Dock Settings...**, **Open Config Folder**, **Update Agent Dock**: see **Settings** above.
+- **Show Compose Box**, **Agent Dock Settings...**, **Open Config Folder**, **Update Agent Dock**: see **Settings** above.
 
 ### Help
 - **Usage and Menu Reference** (F1): this help.
@@ -124,7 +128,7 @@ reach your agent while the dock is in front.
 
 ## The compose box
 
-Turn it on in **Settings -> Agent Dock Settings -> Show the compose box**. Off, the dock shows
+Turn it on with **Settings -> Show Compose Box** (or in **Settings -> Agent Dock Settings**). Off, the dock shows
 no compose box at all.
 
 It is a plain Windows text box across the bottom of the dock. Write your prompt there the way
@@ -139,7 +143,9 @@ to the end).
 - **Up** on the first line brings back earlier prompts, newest first. **Down** goes forward again,
   back to what you were writing. With Claude Code in the pane, these are every prompt that pane's
   session was sent, whether you wrote it in the box or typed it straight into the terminal (read
-  from Claude Code's own prompt history). With another agent, they are the prompts sent from the box.
+  from Claude Code's own prompt history). That includes prompts sent while the box was off, and the
+  ones from before a `/clear` in that pane. Prompts come back with their line breaks, as they were
+  written. With another agent, they are the prompts sent from the box.
   Pick another pane while stepping back, and Up starts again with that pane's own prompts.
 - **The bar above the box** resizes it: drag it up for a taller box and smaller panes, down for the
   other way. The dock remembers the height.

@@ -217,8 +217,11 @@ namespace AgentDockStandalone {
             return true;
         }
 
+        // A Windows text box breaks lines only at CR LF. Prompts come back from the agent's record
+        // with bare LF (or CR) line breaks, which the box would run together, so they become CR LF.
         private void SetPrompt(string astrText) {
-            txtPrompt.Text           = astrText;
+            string strText = (astrText ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\r\n");
+            txtPrompt.Text           = strText;
             txtPrompt.SelectionStart = txtPrompt.TextLength;
             txtPrompt.ScrollToCaret();
         }

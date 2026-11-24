@@ -40,7 +40,7 @@ namespace AgentDockStandalone {
                     if (m.Success) { strSession = m.Groups[1].Value; break; }
                 }
                 if (strSession == null) return null;
-                return ReadSession(strDir, strSession, aintMax);
+                return ReadSessions(strDir, SessionChain(strDir, strSession), aintMax);
             } catch (Exception) {
                 return null;
             }
@@ -56,18 +56,78 @@ namespace AgentDockStandalone {
             return Directory.Exists(strDir) ? strDir : null;
         }
 
-        private static List<string> ReadSession(string astrDir, string astrSession, int aintMax) {
+        // The session and the ones it came from. /clear (and a resume) starts a new session, and
+        // its transcript (projects\<folder>\<id>.jsonl) opens with a "derived-from" line naming
+        // the one before. Following that line back means Up still finds the prompts sent before a
+        // /clear, and the prompts sent while the compose box was off, all of them, in order.
+        private const int CNST_CHAIN_MAX       = 20;
+        private const int CNST_HEAD_BYTES      = 64 * 1024;
+        private static readonly Regex RX_DERIVED = new Regex(@"""type""\s*:\s*""derived-from""");
+        private static readonly Regex RX_FROM_ID = new Regex(@"""id""\s*:\s*""([^""]+)""");
+
+        private static HashSet<string> SessionChain(string astrDir, string astrSession) {
+            HashSet<string> set = new HashSet<string>();
+            Queue<string> todo = new Queue<string>();
+            todo.Enqueue(astrSession);
+            while (todo.Count > 0 && set.Count < CNST_CHAIN_MAX) {
+                string strId = todo.Dequeue();
+                if (!set.Add(strId)) continue;
+                foreach (string strFrom in DerivedFrom(astrDir, strId)) todo.Enqueue(strFrom);
+            }
+            return set;
+        }
+
+        private static List<string> DerivedFrom(string astrDir, string astrSession) {
+            List<string> lst = new List<string>();
+            try {
+                if (astrSession.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return lst;
+                string strProjects = Path.Combine(astrDir, "projects");
+                if (!Directory.Exists(strProjects)) return lst;
+                foreach (string strFolder in Directory.GetDirectories(strProjects)) {
+                    string strFile = Path.Combine(strFolder, astrSession + ".jsonl");
+                    if (!File.Exists(strFile)) continue;
+                    foreach (string strLine in ReadHeadLines(strFile)) {
+                        if (!RX_DERIVED.IsMatch(strLine)) continue;
+                        foreach (Match m in RX_FROM_ID.Matches(strLine)) lst.Add(m.Groups[1].Value);
+                    }
+                    break;
+                }
+            } catch (Exception) { /* no chain, the session alone */ }
+            return lst;
+        }
+
+        // The first CNST_HEAD_BYTES of a transcript as whole lines: the derived-from line is near the top.
+        private static List<string> ReadHeadLines(string astrFile) {
+            List<string> lst = new List<string>();
+            using (FileStream fs = new FileStream(astrFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) {
+                byte[] buf = new byte[(int)Math.Min(fs.Length, CNST_HEAD_BYTES)];
+                int intRead = 0;
+                while (intRead < buf.Length) {
+                    int n = fs.Read(buf, intRead, buf.Length - intRead);
+                    if (n <= 0) break;
+                    intRead += n;
+                }
+                string[] lines = Encoding.UTF8.GetString(buf, 0, intRead).Split('\n');
+                // The last line may be cut off unless the whole file was read.
+                int intEnd = intRead < fs.Length ? lines.Length - 1 : lines.Length;
+                for (int i = 0; i < intEnd; i++) lst.Add(lines[i].TrimEnd('\r'));
+            }
+            return lst;
+        }
+
+        private static List<string> ReadSessions(string astrDir, HashSet<string> asetSessions, int aintMax) {
             List<string> lst = new List<string>();
             string strFile = Path.Combine(astrDir, "history.jsonl");
             if (!File.Exists(strFile)) return lst;
             JavaScriptSerializer js = new JavaScriptSerializer();
             js.MaxJsonLength = Int32.MaxValue;
-            string strQuoted = "\"" + astrSession + "\"";
             foreach (string strLine in ReadTailLines(strFile)) {
-                if (strLine.IndexOf(strQuoted, StringComparison.Ordinal) < 0) continue;
+                Match mSession = RX_SESSION.Match(strLine);
+                if (!mSession.Success || !asetSessions.Contains(mSession.Groups[1].Value)) continue;
                 Dictionary<string, object> row;
                 try { row = js.DeserializeObject(strLine) as Dictionary<string, object>; } catch (Exception) { continue; }
-                if (row == null || !astrSession.Equals(row.ContainsKey("sessionId") ? row["sessionId"] as string : null)) continue;
+                string strRowSession = row == null || !row.ContainsKey("sessionId") ? null : row["sessionId"] as string;
+                if (strRowSession == null || !asetSessions.Contains(strRowSession)) continue;
                 string strText = Expand(astrDir, row);
                 if (String.IsNullOrEmpty(strText)) continue;
                 if (lst.Count > 0 && lst[lst.Count - 1] == strText) continue;

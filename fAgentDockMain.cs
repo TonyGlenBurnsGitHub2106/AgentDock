@@ -811,11 +811,42 @@ namespace AgentDockStandalone {
             ToolStripMenuItem mnuUpdate = new ToolStripMenuItem("&Update Agent Dock");
             mnuUpdate.ToolTipText = "Get the newest version with git, build it, and restart the dock. Open panes keep running.";
             mnuUpdate.Click += delegate { UpdateAgentDock(); };
+            // Show Compose Box: the same switch as the one in the settings dialog, one click away.
+            mnuShowCompose = new ToolStripMenuItem("Show &Compose Box");
+            mnuShowCompose.ToolTipText = "Show or hide the compose box across the bottom of the dock. Remembered.";
+            mnuShowCompose.Checked = cDockSettings.ShowComposeBox;
+            mnuShowCompose.Click += delegate { ToggleComposeBox(); };
+            mnuSettings.DropDownItems.Add(mnuShowCompose);
+            mnuSettings.DropDownItems.Add(new ToolStripSeparator());
             mnuSettings.DropDownItems.Add(mnuEdit);
             mnuSettings.DropDownItems.Add(mnuFolder);
             mnuSettings.DropDownItems.Add(new ToolStripSeparator());
             mnuSettings.DropDownItems.Add(mnuUpdate);
             msMenu.Items.Insert(msMenu.Items.IndexOf(mnuWindow) + 1, mnuSettings);
+        }
+
+        private ToolStripMenuItem mnuShowCompose;
+
+        // Settings -> Show Compose Box: flips the setting, saves it and shows or hides the box at once.
+        private void ToggleComposeBox() {
+            bool blnShow = !cDockSettings.ShowComposeBox;
+            string strProblem = null;
+            try {
+                cDockSettings.Save(cDockSettings.HidePaneTitleBars, cDockSettings.StartAsAdministrator, blnShow);
+            } catch (Exception ex) {
+                strProblem = ex.Message;
+            }
+            ApplyComposeBox(blnShow);
+            this.tslStatus.Text = (blnShow ? "Compose box shown." : "Compose box hidden.")
+                + (strProblem == null ? "" : " Not remembered: " + strProblem);
+        }
+
+        private void ApplyComposeBox(bool ablnShow) {
+            mnuShowCompose.Checked = ablnShow;
+            if (mCompose.Visible == ablnShow) return;
+            mCompose.SetShown(ablnShow);
+            if (mPanes != null) mPanes.ReTile();
+            if (ablnShow) mCompose.FocusPrompt();
         }
 
         private void ShowSettings() {
@@ -834,11 +865,7 @@ namespace AgentDockStandalone {
                 if (mPanes != null) mPanes.ReTile();
             }
             bool blnCompose = cDockSettings.ShowComposeBox;
-            if (blnCompose != blnWasCompose) {
-                mCompose.SetShown(blnCompose);
-                if (mPanes != null) mPanes.ReTile();
-                if (blnCompose) mCompose.FocusPrompt();
-            }
+            if (blnCompose != blnWasCompose) ApplyComposeBox(blnCompose);
             this.tslStatus.Text = "Settings saved.";
             bool blnAdmin = cDockSettings.StartAsAdministrator;
             if (blnAdmin != blnWasAdmin) {
@@ -893,6 +920,12 @@ namespace AgentDockStandalone {
 
         private void UpdateAgentDock() { UpdateAgentDock(true); }
 
+        // This dock's version, as Help -> About shows it (1.0.N).
+        private static string CurrentVersion() {
+            Version v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            return v == null ? "unknown" : v.ToString(3);
+        }
+
         private void UpdateAgentDock(bool ablnAsk) {
             string strRoot   = Program.RepoRoot;
             string strScript = strRoot == null ? null : Path.Combine(strRoot, CNST_UPDATE_SCRIPT);
@@ -904,6 +937,7 @@ namespace AgentDockStandalone {
             int intPanes = (this.MdiChildren == null) ? 0 : this.MdiChildren.Length;
             DialogResult dr = !ablnAsk ? DialogResult.Yes : MessageBox.Show(this,
                 "Update Agent Dock?\r\n\r\n"
+                + "You are on version " + CurrentVersion() + ".\r\n\r\n"
                 + "The dock closes, gets the newest version with git, builds it, and starts again. "
                 + "A window shows the progress.\r\n\r\n"
                 + (intPanes > 0
