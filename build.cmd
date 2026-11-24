@@ -7,7 +7,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 if not exist "%CSC%" set CSC=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe
 if not exist "%CSC%" goto nonet
 if not exist bin mkdir bin
-"%CSC%" /nologo /target:winexe /optimize+ /out:bin\AgentDockStandalone.exe /win32manifest:app.manifest /win32icon:AgentDock.ico /resource:AgentDock.ico,AgentDockStandalone.AgentDock.ico /r:System.Windows.Forms.dll /r:System.Drawing.dll *.cs
+"%CSC%" /nologo /target:winexe /optimize+ /out:bin\AgentDockStandalone.exe /win32manifest:app.manifest /win32icon:AgentDock.ico /resource:AgentDock.ico,AgentDockStandalone.AgentDock.ico /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll *.cs
 if errorlevel 1 (
   echo.
   echo Build FAILED.

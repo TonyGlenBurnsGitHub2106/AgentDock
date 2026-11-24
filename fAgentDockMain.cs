@@ -78,17 +78,39 @@ namespace AgentDockStandalone {
                 delegate { return mPanes == null ? new List<Form>() : mPanes.OrderedPanes(); },
                 delegate(Form f) { if (mPanes != null) mPanes.SetCurrentPane(f); },
                 delegate(string s) { this.tslStatus.Text = s; });
+            mCompose.Height = cDockSettings.ComposeBoxHeight;
             this.Controls.Add(mCompose);
+
+            // The bar between the panes and the compose box: drag it up for a taller box and
+            // smaller panes, down for the other way. The height is remembered (ComposeBoxHeight).
+            msplCompose = new Splitter();
+            msplCompose.Dock      = DockStyle.Bottom;
+            msplCompose.Height    = 6;
+            msplCompose.MinSize   = cDockSettings.CNST_COMPOSE_MIN_HEIGHT;
+            msplCompose.MinExtra  = 120;            // always leave the panes this much
+            msplCompose.BackColor = SystemColors.ControlDark;
+            msplCompose.Cursor    = Cursors.HSplit;
+            msplCompose.SplitterMoved += delegate {
+                if (mPanes != null) mPanes.ReTile();
+                try { cDockSettings.SaveComposeBoxHeight(mCompose.Height); } catch { /* not remembered, no harm */ }
+            };
+            this.Controls.Add(msplCompose);
+            mCompose.VisibleChanged += delegate { msplCompose.Visible = mCompose.Visible; };
+
             // Docking runs from the back of the z-order to the front: the menu and status bar stay
-            // outermost, then the compose box, and the pane area fills what is left.
+            // outermost, then the compose box, its bar, and the pane area fills what is left.
             MdiClient mdi = null;
             foreach (Control c in this.Controls) { if (c is MdiClient) mdi = (MdiClient)c; }
             if (mdi != null) {
                 this.Controls.SetChildIndex(mdi, 0);
-                this.Controls.SetChildIndex(mCompose, 1);
+                this.Controls.SetChildIndex(msplCompose, 1);
+                this.Controls.SetChildIndex(mCompose, 2);
             }
             mCompose.SetShown(cDockSettings.ShowComposeBox);
+            msplCompose.Visible = mCompose.Visible;
         }
+
+        private Splitter msplCompose;
 
         // Where a prompt goes: the pane last clicked, or the only pane when there is one.
         private fAgentAbsorbedTerminal ComposeTarget() {

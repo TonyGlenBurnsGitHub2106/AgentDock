@@ -177,20 +177,35 @@ namespace AgentDockStandalone {
         }
 
         // Moves through earlier prompts. Leaving the newest end puts the unsent draft back.
+        // The list being stepped through. Taken fresh on the first Up: the target pane's own
+        // prompts from its agent (cAgentHistory), so prompts typed straight into the terminal are
+        // there too, in the order they were sent. A pane whose agent keeps no record the dock can
+        // read uses the prompts sent from this box.
+        private List<string> mlstBrowse = new List<string>();
+
+        private List<string> HistoryForTarget() {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            List<string> lstAgent = pane == null ? null : cAgentHistory.ForPane(pane.AbsorbedHwnd, CNST_HISTORY_MAX);
+            return (lstAgent != null && lstAgent.Count > 0) ? lstAgent : new List<string>(mlstHistory);
+        }
+
         private bool StepHistory(int aintStep) {
-            if (mlstHistory.Count == 0) return false;
-            int intAt = mintHistoryAt < 0 ? mlstHistory.Count : mintHistoryAt;
+            if (mintHistoryAt < 0) {
+                if (aintStep > 0) return false;
+                mlstBrowse = HistoryForTarget();
+            }
+            if (mlstBrowse.Count == 0) return false;
+            int intAt = mintHistoryAt < 0 ? mlstBrowse.Count : mintHistoryAt;
             intAt += aintStep;
             if (intAt < 0) return true;                       // already at the oldest
-            if (intAt >= mlstHistory.Count) {
-                if (mintHistoryAt < 0) return false;
+            if (intAt >= mlstBrowse.Count) {
                 mintHistoryAt = -1;
                 SetPrompt(mstrDraft);
                 return true;
             }
             if (mintHistoryAt < 0) mstrDraft = txtPrompt.Text;
             mintHistoryAt = intAt;
-            SetPrompt(mlstHistory[intAt]);
+            SetPrompt(mlstBrowse[intAt]);
             return true;
         }
 

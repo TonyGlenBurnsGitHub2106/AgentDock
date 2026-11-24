@@ -134,7 +134,11 @@ to the end).
   it. The box empties and is ready for the next one.
 - **Shift+Enter** starts a new line. A prompt with several lines reaches the agent as one prompt.
 - **Up** on the first line brings back earlier prompts, newest first. **Down** goes forward again,
-  back to what you were writing.
+  back to what you were writing. With Claude Code in the pane, these are every prompt that pane's
+  session was sent, whether you wrote it in the box or typed it straight into the terminal (read
+  from Claude Code's own prompt history). With another agent, they are the prompts sent from the box.
+- **The bar above the box** resizes it: drag it up for a taller box and smaller panes, down for the
+  other way. The dock remembers the height.
 - **Send to**, under **Send**, lists the panes and shows which one the prompt goes to. It follows
   the pane you click in. Pick a different pane in the list to send there instead.
   Each pane is listed by its terminal's title, so renaming a tab in Windows Terminal renames

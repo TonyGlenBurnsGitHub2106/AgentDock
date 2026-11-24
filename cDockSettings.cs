@@ -32,6 +32,11 @@ namespace AgentDockStandalone {
         public const string KEY_SHOW_COMPOSE_BOX = "ShowComposeBox";
         private const bool  DEFAULT_SHOW_COMPOSE_BOX = false;
 
+        // The compose box's height in pixels, set by dragging the bar above it (Story 6826).
+        public const string KEY_COMPOSE_BOX_HEIGHT = "ComposeBoxHeight";
+        private const int   DEFAULT_COMPOSE_BOX_HEIGHT = 92;
+        public const int    CNST_COMPOSE_MIN_HEIGHT    = 60;
+
         private static readonly Dictionary<string, string> mdicValues =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static string mstrConfigFolder;
@@ -52,6 +57,22 @@ namespace AgentDockStandalone {
 
         public static bool ShowComposeBox {
             get { return ReadBool(KEY_SHOW_COMPOSE_BOX, DEFAULT_SHOW_COMPOSE_BOX); }
+        }
+
+        public static int ComposeBoxHeight {
+            get {
+                string strValue; int intHeight;
+                if (mdicValues.TryGetValue(KEY_COMPOSE_BOX_HEIGHT, out strValue)
+                    && Int32.TryParse(strValue, out intHeight) && intHeight >= CNST_COMPOSE_MIN_HEIGHT)
+                    return intHeight;
+                return DEFAULT_COMPOSE_BOX_HEIGHT;
+            }
+        }
+
+        // Remembers the compose box height, keeping every other setting as it is.
+        public static void SaveComposeBoxHeight(int aintHeight) {
+            mdicValues[KEY_COMPOSE_BOX_HEIGHT] = Math.Max(CNST_COMPOSE_MIN_HEIGHT, aintHeight).ToString();
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
         }
 
         // Reads config\agentdock.ini from the config folder, writing the defaults first when it
@@ -167,7 +188,10 @@ namespace AgentDockStandalone {
                  + "# true: a compose box under the panes, for writing prompts like in any Windows text box.\r\n"
                  + "#   Enter sends to the pane you last clicked, Shift+Enter is a new line, Up brings back earlier prompts.\r\n"
                  + "# false (the default): no compose box. You type in the terminals as usual.\r\n"
-                 + KEY_SHOW_COMPOSE_BOX + " = " + (ablnShowComposeBox ? "true" : "false") + "\r\n";
+                 + KEY_SHOW_COMPOSE_BOX + " = " + (ablnShowComposeBox ? "true" : "false") + "\r\n"
+                 + "\r\n"
+                 + "# The compose box height in pixels. Set it by dragging the bar above the box.\r\n"
+                 + KEY_COMPOSE_BOX_HEIGHT + " = " + ComposeBoxHeight + "\r\n";
         }
     }
 }

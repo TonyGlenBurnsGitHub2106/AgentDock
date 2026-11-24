@@ -73,6 +73,38 @@ namespace AgentDockStandalone {
                 : "Could not reach that pane. A pane running as administrator needs the dock running as administrator.";
         }
 
+        // Every process attached to the console behind ahwndTerminal (the shell, the agent and
+        // anything they started). Empty when that console cannot be reached. Used to find the
+        // agent's own prompt history (cAgentHistory).
+        public static List<uint> ConsoleProcesses(IntPtr ahwndTerminal) {
+            List<uint> lstFound = new List<uint>();
+            if (ahwndTerminal == IntPtr.Zero || !IsWindow(ahwndTerminal)) return lstFound;
+            List<uint> lstShells;
+            try { lstShells = cTabColor.FindTerminalShells(); } catch (Exception) { return lstFound; }
+            foreach (uint intPid in lstShells) {
+                FreeConsole();
+                if (!AttachConsole(intPid)) continue;
+                try {
+                    IntPtr hwndConsole = GetConsoleWindow();
+                    if (hwndConsole == IntPtr.Zero || GetWindow(hwndConsole, GW_OWNER) != ahwndTerminal) continue;
+                    uint[] pids = new uint[64];
+                    uint intCount = GetConsoleProcessList(pids, (uint)pids.Length);
+                    if (intCount > pids.Length) {
+                        pids = new uint[intCount];
+                        intCount = GetConsoleProcessList(pids, (uint)pids.Length);
+                    }
+                    for (int i = 0; i < intCount && i < pids.Length; i++)
+                        if (!lstFound.Contains(pids[i])) lstFound.Add(pids[i]);
+                } finally {
+                    FreeConsole();
+                }
+            }
+            return lstFound;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint GetConsoleProcessList([Out] uint[] lpdwProcessList, uint dwProcessCount);
+
         // A key down and a key up for each character. Enter carries its virtual key code, so an
         // agent that looks at the key (not the character) sees Enter.
         private static INPUT_RECORD[] BuildRecords(string astrKeys) {
