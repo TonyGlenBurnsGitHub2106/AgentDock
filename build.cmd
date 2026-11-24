@@ -7,12 +7,30 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 if not exist "%CSC%" set CSC=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe
 if not exist "%CSC%" goto nonet
 if not exist bin mkdir bin
-"%CSC%" /nologo /target:winexe /optimize+ /out:bin\AgentDockStandalone.exe /win32manifest:app.manifest /win32icon:AgentDock.ico /resource:AgentDock.ico,AgentDockStandalone.AgentDock.ico /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll *.cs
+rem Built to a new file first, then swapped in. A running dock (another window, or one still
+rem closing) keeps bin\AgentDockStandalone.exe locked: Windows will not overwrite it, but it
+rem will rename it. So when the plain swap fails, the old one is renamed out of the way.
+"%CSC%" /nologo /target:winexe /optimize+ /out:bin\AgentDockStandalone.new.exe /win32manifest:app.manifest /win32icon:AgentDock.ico /resource:AgentDock.ico,AgentDockStandalone.AgentDock.ico /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll *.cs
 if errorlevel 1 (
   echo.
   echo Build FAILED.
   exit /b 1
 )
+move /y bin\AgentDockStandalone.new.exe bin\AgentDockStandalone.exe >nul 2>nul
+if not errorlevel 1 goto built
+rem In use. Rename the running one (replacing an earlier leftover if that one is free).
+move /y bin\AgentDockStandalone.exe bin\AgentDockStandalone.old.exe >nul 2>nul
+if errorlevel 1 move bin\AgentDockStandalone.exe bin\AgentDockStandalone.old-%RANDOM%.exe >nul 2>nul
+move /y bin\AgentDockStandalone.new.exe bin\AgentDockStandalone.exe >nul 2>nul
+if errorlevel 1 (
+  echo.
+  echo Build FAILED: bin\AgentDockStandalone.exe is in use and could not be moved aside.
+  echo Close every Agent Dock window and run build.cmd again.
+  exit /b 1
+)
+echo.
+echo The old Agent Dock was still running, so it was renamed bin\AgentDockStandalone.old*.exe.
+:built
 echo.
 echo Built bin\AgentDockStandalone.exe
 exit /b 0
