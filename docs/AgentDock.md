@@ -130,6 +130,8 @@ to the end).
   back to what you were writing.
 - **Send to**, under **Send**, lists the panes and shows which one the prompt goes to. It follows
   the pane you click in. Pick a different pane in the list to send there instead.
+  Each pane is listed by its terminal's title, so renaming a tab in Windows Terminal renames
+  the pane in the list too.
 - You can still type in the terminals directly. The answers show in the panes as always.
 
 If a prompt cannot be sent, it stays in the box and the status bar says why. A pane running as

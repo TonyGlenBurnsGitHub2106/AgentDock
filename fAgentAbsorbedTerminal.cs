@@ -54,10 +54,8 @@ namespace AgentDockStandalone {
             InitializeComponent();
             mhwndAbsorbed  = ahwndAbsorbed;
             mblnOwnedSpawn = ablnOwnedSpawn;
-            string strTitle = ReadWindowTitle(ahwndAbsorbed);
-            if (ablnAdmin && !strTitle.StartsWith("[ADMIN]"))
-                strTitle = "[ADMIN] " + strTitle;
-            this.Text = strTitle;
+            mblnAdmin = ablnAdmin;
+            this.Text = TitleFor(ReadWindowTitle(ahwndAbsorbed));
             // config\agentdock.ini HidePaneTitleBars (default true, Story 6817): no title bar on
             // the pane, so the terminal gets that row. Close / Undock live on the Agents menu.
             ApplyTitleBar(cDockSettings.HidePaneTitleBars);
@@ -208,7 +206,7 @@ namespace AgentDockStandalone {
 
         private void Watchdog_Tick(object sender, EventArgs e) {
             if (this.IsDisposed) return;
-            if (mhwndAbsorbed != IntPtr.Zero && Win32.IsWindow(mhwndAbsorbed)) return;
+            if (mhwndAbsorbed != IntPtr.Zero && Win32.IsWindow(mhwndAbsorbed)) { FollowTitle(); return; }
             mhwndAbsorbed = IntPtr.Zero;
             mblnRestored  = true;
             if (mtmrWatchdog != null) {
@@ -294,6 +292,20 @@ namespace AgentDockStandalone {
                 && Win32.IsWindow(mhwndAbsorbed)) {
                 Win32.PostMessage(mhwndAbsorbed, Win32.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
             }
+        }
+
+        private bool mblnAdmin;
+
+        private string TitleFor(string astrWindowTitle) {
+            if (mblnAdmin && !astrWindowTitle.StartsWith("[ADMIN]")) return "[ADMIN] " + astrWindowTitle;
+            return astrWindowTitle;
+        }
+
+        // The pane's title follows its terminal's (Story 6826): renaming the tab in Windows
+        // Terminal renames the pane, and the compose box's Send to list shows the new name.
+        private void FollowTitle() {
+            string strTitle = TitleFor(ReadWindowTitle(mhwndAbsorbed));
+            if (this.Text != strTitle) this.Text = strTitle;
         }
 
         private static string ReadWindowTitle(IntPtr hwnd) {
