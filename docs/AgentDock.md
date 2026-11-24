@@ -69,10 +69,13 @@ also run `update.cmd` by hand with the dock closed.
 
 **Updating from outside the dock.** `tools\Update-RunningDock.ps1` does the same update with no
 question asked. It is there for an AI agent that has just changed the dock: it runs the script
-and the dock you are using brings itself up to date, panes and all. If no dock is running it only
-builds. If more than one is running it does nothing and says so. It waits while one of the dock's
-own dialogs is open. Docks older than 1.0.25 do not know the request, so update those once from
-the menu.
+and the dock you are using brings itself up to date, panes and all. An update is always the same
+sequence: every pane is released to the desktop still running, the dock closes, the new version is
+pulled and built, and the new dock takes every terminal back in. With several docks running, the
+others release their panes and close first, so the one new dock holds them all. A dock running as
+administrator is preferred for the update, so admin terminals come back in too. If no dock is
+running, the script only builds. It waits while one of the dock's own dialogs is open. Docks older
+than 1.0.27 cannot take part, so update those once from the menu.
 
 ---
 
@@ -137,6 +140,7 @@ to the end).
   back to what you were writing. With Claude Code in the pane, these are every prompt that pane's
   session was sent, whether you wrote it in the box or typed it straight into the terminal (read
   from Claude Code's own prompt history). With another agent, they are the prompts sent from the box.
+  Pick another pane while stepping back, and Up starts again with that pane's own prompts.
 - **The bar above the box** resizes it: drag it up for a taller box and smaller panes, down for the
   other way. The dock remembers the height.
 - **Send to**, under **Send**, lists the panes and shows which one the prompt goes to. It follows
