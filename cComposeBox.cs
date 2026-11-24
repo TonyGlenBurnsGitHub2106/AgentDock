@@ -189,8 +189,16 @@ namespace AgentDockStandalone {
             return (lstAgent != null && lstAgent.Count > 0) ? lstAgent : new List<string>(mlstHistory);
         }
 
+        private Form mfrmBrowsePane;           // the pane mlstBrowse came from
+
         private bool StepHistory(int aintStep) {
+            // Another pane picked while stepping: its own prompts, from the newest again.
+            // What you were writing before you started stepping stays the draft.
+            Form frmTarget = mfncTarget();
+            bool blnSwitched = mintHistoryAt >= 0 && frmTarget != mfrmBrowsePane;
+            if (blnSwitched) mintHistoryAt = -1;
             if (mintHistoryAt < 0) {
+                mfrmBrowsePane = frmTarget;
                 if (aintStep > 0) return false;
                 mlstBrowse = HistoryForTarget();
             }
@@ -203,7 +211,7 @@ namespace AgentDockStandalone {
                 SetPrompt(mstrDraft);
                 return true;
             }
-            if (mintHistoryAt < 0) mstrDraft = txtPrompt.Text;
+            if (mintHistoryAt < 0 && !blnSwitched) mstrDraft = txtPrompt.Text;
             mintHistoryAt = intAt;
             SetPrompt(mlstBrowse[intAt]);
             return true;

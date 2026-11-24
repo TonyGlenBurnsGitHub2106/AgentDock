@@ -861,6 +861,7 @@ namespace AgentDockStandalone {
         private const string CNST_UPDATE_MESSAGE = "AgentDock.UpdateNow";
         private static readonly int WM_AGENTDOCK_UPDATE = RegisterWindowMessage(CNST_UPDATE_MESSAGE);
         private const uint MSGFLT_ALLOW = 1;
+        private const long CNST_UPDATE_RELEASE_ONLY = 1;
 
         protected override void OnHandleCreated(EventArgs e) {
             base.OnHandleCreated(e);
@@ -870,9 +871,15 @@ namespace AgentDockStandalone {
 
         protected override void WndProc(ref Message m) {
             if (WM_AGENTDOCK_UPDATE != 0 && m.Msg == WM_AGENTDOCK_UPDATE) {
+                // wParam 1: release every pane to the desktop alive and close, nothing more. Sent
+                // to every other dock when several run, so the one that updates takes all their
+                // terminals back in. wParam 0: update (release, close, pull, build, absorb).
                 // Not while a dialog of the dock's is open: the script sees the dock still
                 // running and says so.
-                if (this.Enabled) this.BeginInvoke(new MethodInvoker(delegate { UpdateAgentDock(false); }));
+                bool blnReleaseOnly = m.WParam.ToInt64() == CNST_UPDATE_RELEASE_ONLY;
+                if (this.Enabled) this.BeginInvoke(new MethodInvoker(delegate {
+                    if (blnReleaseOnly) ReleaseAllPanesAndClose(); else UpdateAgentDock(false);
+                }));
                 return;
             }
             base.WndProc(ref m);
@@ -912,7 +919,9 @@ namespace AgentDockStandalone {
                     "/c \"\"" + strScript + "\" " + Process.GetCurrentProcess().Id + "\"");
                 psi.UseShellExecute  = false;
                 psi.WorkingDirectory = strRoot;
-                psi.EnvironmentVariables[CNST_RELAUNCH_ENV] = RelaunchArgs(intPanes > 0);
+                // Asked from outside, other docks may have released their panes for this one, so
+                // the new dock always takes every terminal back in.
+                psi.EnvironmentVariables[CNST_RELAUNCH_ENV] = RelaunchArgs(intPanes > 0 || !ablnAsk);
                 Process.Start(psi);
             } catch (Exception ex) {
                 MessageBox.Show(this, "Could not start the update:\r\n\r\n" + ex.Message,
