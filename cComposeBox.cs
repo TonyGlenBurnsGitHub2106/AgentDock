@@ -56,7 +56,7 @@ namespace AgentDockStandalone {
 
             Panel pnlRight = new Panel();
             pnlRight.Dock    = DockStyle.Right;
-            pnlRight.Width   = 170;
+            pnlRight.Width   = cDockSettings.ComposeSendWidth;
             pnlRight.Padding = new Padding(6, 0, 0, 0);
 
             btnSend.Text   = "Send";
@@ -82,6 +82,10 @@ namespace AgentDockStandalone {
                 if (item != null) mactSetTarget(item.Pane);
             };
             cboTarget.DropDownClosed += delegate { txtPrompt.Focus(); };
+            // Each pane is shown in its own tab's color (Story 6828).
+            cboTarget.DrawMode   = DrawMode.OwnerDrawFixed;
+            cboTarget.ItemHeight = cboTarget.Font.Height + 4;
+            cboTarget.DrawItem  += new DrawItemEventHandler(Target_DrawItem);
 
             pnlRight.Controls.Add(cboTarget);
             pnlRight.Controls.Add(lblTarget);
@@ -96,7 +100,22 @@ namespace AgentDockStandalone {
             txtPrompt.Font          = new Font("Consolas", 10F);
             txtPrompt.KeyDown      += new KeyEventHandler(Prompt_KeyDown);
 
+            // The bar between the text and the Send area: drag it left for a wider Send to list,
+            // right for more text. The width is remembered (ComposeSendWidth, Story 6828).
+            Splitter splSend = new Splitter();
+            splSend.Dock      = DockStyle.Right;
+            splSend.Width     = 6;
+            splSend.MinSize   = cDockSettings.CNST_COMPOSE_SEND_MIN_WIDTH;
+            splSend.MinExtra  = 120;               // always leave the text this much
+            splSend.BackColor = SystemColors.ControlDark;
+            splSend.Cursor    = Cursors.VSplit;
+            splSend.SplitterMoved += delegate {
+                try { cDockSettings.SaveComposeSendWidth(pnlRight.Width); } catch { /* not remembered, no harm */ }
+            };
+
+            // Docked from the back of the z-order: the Send area, then its bar, then the text fills.
             this.Controls.Add(txtPrompt);
+            this.Controls.Add(splSend);
             this.Controls.Add(pnlRight);
 
             tmrTarget.Interval = 400;
@@ -120,6 +139,34 @@ namespace AgentDockStandalone {
             public readonly string Caption;
             public TargetItem(Form afrm, int aintNumber) { Pane = afrm; Caption = aintNumber + ". " + afrm.Text; }
             public override string ToString() { return Caption; }
+        }
+
+        // Draws a Send to entry on its pane's tab color, with black or white text, whichever
+        // reads better. The chosen entry in the open list gets a frame instead of the usual blue,
+        // so its color still shows. A pane whose color the dock does not know is drawn plainly.
+        private void Target_DrawItem(object sender, DrawItemEventArgs e) {
+            if (e.Index < 0 || e.Index >= cboTarget.Items.Count) { e.DrawBackground(); return; }
+            TargetItem item = (TargetItem)cboTarget.Items[e.Index];
+            fAgentAbsorbedTerminal abs = item.Pane as fAgentAbsorbedTerminal;
+            Color clrBack = abs == null ? Color.Empty : cPaneColors.ColorOf(abs.AbsorbedHwnd);
+            bool  blnSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            Color clrText;
+            if (clrBack.IsEmpty) {
+                e.DrawBackground();
+                clrText = e.ForeColor;
+            } else {
+                using (SolidBrush br = new SolidBrush(clrBack)) e.Graphics.FillRectangle(br, e.Bounds);
+                double dblLight = 0.299 * clrBack.R + 0.587 * clrBack.G + 0.114 * clrBack.B;
+                clrText = dblLight > 150 ? Color.Black : Color.White;
+                if (blnSelected && (e.State & DrawItemState.ComboBoxEdit) != DrawItemState.ComboBoxEdit) {
+                    Rectangle r = e.Bounds;
+                    r.Width -= 1; r.Height -= 1;
+                    using (Pen pen = new Pen(clrText, 2)) e.Graphics.DrawRectangle(pen, r);
+                }
+            }
+            TextRenderer.DrawText(e.Graphics, item.Caption, cboTarget.Font,
+                Rectangle.Inflate(e.Bounds, -3, 0), clrText,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
 
         // Keeps the Send to list in step with the panes and the current pane. Left alone while it

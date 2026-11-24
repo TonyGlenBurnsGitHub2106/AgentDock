@@ -388,9 +388,11 @@ namespace AgentDockStandalone {
                 if (dr != DialogResult.Yes) return;
             }
 
+            string strTabHex;
+            string strColorArg = cTabColor.TabColorArgument(out strTabHex);
             string strArgs = "--window new "
                            + (ablnAdmin ? "--title \"[ADMIN] Agent\" " : "")
-                           + cTabColor.TabColorArgument()
+                           + strColorArg
                            + "cmd /k "
                            + (astrCommand ?? ("\"" + mstrBatPath + "\""));
 
@@ -452,6 +454,7 @@ namespace AgentDockStandalone {
                     // the pane should kill its cmd.exe + claude, not release
                     // the WT window back to the desktop.
                     // A normal pane that fell back to an elevated launch is admin -- say so.
+                    cPaneColors.Remember(hNew, strTabHex);   // the Send to list shows it (Story 6828)
                     fAgentAbsorbedTerminal frm = new fAgentAbsorbedTerminal(hNew, true, ablnAdmin || !blnRightLevel);
                     frm.MdiParent   = this;
                     frm.FormClosed += new FormClosedEventHandler(ChildPane_FormClosed);
@@ -534,7 +537,12 @@ namespace AgentDockStandalone {
                     alstAdmin.Add(sbTitle.Length > 0 ? sbTitle.ToString() : "Windows Terminal");
                     continue;
                 }
-                cTabColor.ColorExistingWindow(h);   // absorbed windows get a tab color too
+                // Absorbed windows get a tab color too. One the dock colored before (coming back
+                // after an update) keeps its color, so the Send to list still matches it.
+                if (!cPaneColors.Known(h)) {
+                    string strTabHex;
+                    if (cTabColor.ColorExistingWindow(h, out strTabHex)) cPaneColors.Remember(h, strTabHex);
+                }
                 fAgentAbsorbedTerminal frm = new fAgentAbsorbedTerminal(h);
                 frm.MdiParent   = this;
                 frm.FormClosed += new FormClosedEventHandler(ChildPane_FormClosed);

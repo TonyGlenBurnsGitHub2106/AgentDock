@@ -37,6 +37,12 @@ namespace AgentDockStandalone {
         private const int   DEFAULT_COMPOSE_BOX_HEIGHT = 92;
         public const int    CNST_COMPOSE_MIN_HEIGHT    = 60;
 
+        // The width of the Send / Send to area at the right of the compose box, set by dragging
+        // the bar between it and the text (Story 6828).
+        public const string KEY_COMPOSE_SEND_WIDTH = "ComposeSendWidth";
+        private const int   DEFAULT_COMPOSE_SEND_WIDTH = 170;
+        public const int    CNST_COMPOSE_SEND_MIN_WIDTH = 90;
+
         private static readonly Dictionary<string, string> mdicValues =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static string mstrConfigFolder;
@@ -67,6 +73,22 @@ namespace AgentDockStandalone {
                     return intHeight;
                 return DEFAULT_COMPOSE_BOX_HEIGHT;
             }
+        }
+
+        public static int ComposeSendWidth {
+            get {
+                string strValue; int intWidth;
+                if (mdicValues.TryGetValue(KEY_COMPOSE_SEND_WIDTH, out strValue)
+                    && Int32.TryParse(strValue, out intWidth) && intWidth >= CNST_COMPOSE_SEND_MIN_WIDTH)
+                    return intWidth;
+                return DEFAULT_COMPOSE_SEND_WIDTH;
+            }
+        }
+
+        // Remembers the width of the Send area, keeping every other setting as it is.
+        public static void SaveComposeSendWidth(int aintWidth) {
+            mdicValues[KEY_COMPOSE_SEND_WIDTH] = Math.Max(CNST_COMPOSE_SEND_MIN_WIDTH, aintWidth).ToString();
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
         }
 
         // Remembers the compose box height, keeping every other setting as it is.
@@ -191,7 +213,11 @@ namespace AgentDockStandalone {
                  + KEY_SHOW_COMPOSE_BOX + " = " + (ablnShowComposeBox ? "true" : "false") + "\r\n"
                  + "\r\n"
                  + "# The compose box height in pixels. Set it by dragging the bar above the box.\r\n"
-                 + KEY_COMPOSE_BOX_HEIGHT + " = " + ComposeBoxHeight + "\r\n";
+                 + KEY_COMPOSE_BOX_HEIGHT + " = " + ComposeBoxHeight + "\r\n"
+                 + "\r\n"
+                 + "# The width in pixels of the Send area at the right of the compose box. Set it by dragging\r\n"
+                 + "#   the bar between the text and the Send button.\r\n"
+                 + KEY_COMPOSE_SEND_WIDTH + " = " + ComposeSendWidth + "\r\n";
         }
     }
 }

@@ -79,12 +79,26 @@ namespace AgentDockShared {
         // The wt.exe argument for the next color, with a trailing space so it can be
         // placed directly ahead of the command line.
         public static string TabColorArgument() {
-            return "--tabColor \"" + Next().Hex + "\" ";
+            string strHex;
+            return TabColorArgument(out strHex);
+        }
+
+        // The same, also giving the color chosen ("#RRGGBB"), so the dock can show it (Story 6828).
+        public static string TabColorArgument(out string astrHex) {
+            astrHex = Next().Hex;
+            return "--tabColor \"" + astrHex + "\" ";
         }
 
         // Colors the tab(s) of an already-running Windows Terminal window. Returns true when at
         // least one tab was colored. Never throws -- a tab that cannot be colored keeps its color.
         public static bool ColorExistingWindow(IntPtr ahwndTerminal) {
+            string strHex;
+            return ColorExistingWindow(ahwndTerminal, out strHex);
+        }
+
+        // The same, also giving the color the tab was given ("#RRGGBB"), or null when none was.
+        public static bool ColorExistingWindow(IntPtr ahwndTerminal, out string astrHex) {
+            astrHex = null;
             if (ahwndTerminal == IntPtr.Zero) return false;
             try {
                 List<uint> lstShells = FindTerminalShells();
@@ -93,10 +107,12 @@ namespace AgentDockShared {
                 // Drawn on the first matching tab only, so a window that cannot be reached
                 // (elevated, already closed) does not use up a color.
                 string strSequence = null;
+                string strHex      = null;
                 bool   blnColored  = false;
                 foreach (uint intPid in lstShells) {
-                    if (WriteToShellConsole(intPid, ahwndTerminal, ref strSequence)) blnColored = true;
+                    if (WriteToShellConsole(intPid, ahwndTerminal, ref strSequence, ref strHex)) blnColored = true;
                 }
+                if (blnColored) astrHex = strHex;
                 return blnColored;
             } catch (Exception) {
                 return false;
@@ -106,7 +122,7 @@ namespace AgentDockShared {
         // Writes the DECAC sequence to the console of process aintPid when that console belongs to
         // ahwndTerminal, building the sequence from the bag the first time it is needed. Always
         // detaches before returning.
-        private static bool WriteToShellConsole(uint aintPid, IntPtr ahwndTerminal, ref string astrSequence) {
+        private static bool WriteToShellConsole(uint aintPid, IntPtr ahwndTerminal, ref string astrSequence, ref string astrHex) {
             FreeConsole();
             if (!AttachConsole(aintPid)) return false;
             try {
@@ -117,7 +133,11 @@ namespace AgentDockShared {
                     FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
                 if (hOut == INVALID_HANDLE_VALUE) return false;
                 try {
-                    if (astrSequence == null) astrSequence = CNST_DECAC_PREFIX + Next().PaletteIndex + CNST_DECAC_SUFFIX;
+                    if (astrSequence == null) {
+                        TabColorEntry entry = Next();
+                        astrSequence = CNST_DECAC_PREFIX + entry.PaletteIndex + CNST_DECAC_SUFFIX;
+                        astrHex      = entry.Hex;
+                    }
                     uint intMode;
                     if (GetConsoleMode(hOut, out intMode))
                         SetConsoleMode(hOut, intMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);

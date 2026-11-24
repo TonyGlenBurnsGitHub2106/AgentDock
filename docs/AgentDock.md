@@ -150,14 +150,21 @@ to the end).
   session was sent, whether you wrote it in the box or typed it straight into the terminal (read
   from Claude Code's own prompt history). That includes prompts sent while the box was off, and the
   ones from before a `/clear` in that pane. Prompts come back with their line breaks, as they were
-  written. With another agent, they are the prompts sent from the box.
+  written. With GitHub Copilot CLI in the pane, the dock reads Copilot's own session records the
+  same way (new in 1.0.31, and not yet tried against a live Copilot). With any other agent, they
+  are the prompts sent from the box.
   Pick another pane while stepping back, and Up starts again with that pane's own prompts.
 - **The bar above the box** resizes it: drag it up for a taller box and smaller panes, down for the
   other way. The dock remembers the height.
+- **The bar between the text and Send** sets how much room each gets: drag it left for a wider
+  Send to list, right for more text. The dock remembers the width.
 - **Send to**, under **Send**, lists the panes and shows which one the prompt goes to. It follows
   the pane you click in. Pick a different pane in the list to send there instead.
   Each pane is listed by its terminal's title, so renaming a tab in Windows Terminal renames
-  the pane in the list too.
+  the pane in the list too. Each pane is shown in its tab's color. Windows Terminal cannot be
+  asked a tab's color, so the dock remembers the color it gave each pane. A pane opened before
+  version 1.0.31 may show a color that does not match its tab, or none. Panes opened from then on
+  match, and keep their color through an update.
 - You can still type in the terminals directly. The answers show in the panes as always.
 
 If a prompt cannot be sent, it stays in the box and the status bar says why. A pane running as

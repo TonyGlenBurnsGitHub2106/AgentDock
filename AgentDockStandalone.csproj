@@ -64,7 +64,9 @@
     </Compile>
     <Compile Include="cPaneArranger.cs" />
     <Compile Include="cTabColor.cs" />
+    <Compile Include="cPaneColors.cs" />
     <Compile Include="cAgentHistory.cs" />
+    <Compile Include="cCopilotHistory.cs" />
     <Compile Include="cConsoleInput.cs" />
     <Compile Include="cComposeBox.cs" />
     <Compile Include="cAdminSwap.cs" />

@@ -17,8 +17,9 @@ namespace AgentDockStandalone {
     // its sessionId -> that session's lines in history.jsonl, oldest first. Pasted text is stored
     // as "[Pasted text #N +M lines]" plus the text itself, and is put back.
     //
-    // Other agents (Copilot) keep no such record that the dock knows, so ForPane returns null and
-    // the compose box uses its own history. CLAUDE_CONFIG_DIR moves the folder, as Claude allows.
+    // A pane with no Claude session is tried as GitHub Copilot CLI (cCopilotHistory, Story 6828).
+    // When neither is found, ForPane returns null and the compose box uses its own history.
+    // CLAUDE_CONFIG_DIR moves the folder, as Claude allows.
     internal static class cAgentHistory {
 
         // Only the end of history.jsonl is read: it holds every prompt ever, across all sessions.
@@ -29,11 +30,19 @@ namespace AgentDockStandalone {
         // The prompts of the Claude session in the pane shown by ahwndTerminal, oldest first, at
         // most aintMax of them. Null when no Claude session is found there.
         public static List<string> ForPane(IntPtr ahwndTerminal, int aintMax) {
+            List<uint> lstPids;
+            try { lstPids = cConsoleInput.ConsoleProcesses(ahwndTerminal); } catch (Exception) { return null; }
+            List<string> lst = ClaudeForPids(lstPids, aintMax);
+            if (lst != null) return lst;
+            return cCopilotHistory.ForPids(lstPids, aintMax);
+        }
+
+        private static List<string> ClaudeForPids(List<uint> alstPids, int aintMax) {
             try {
                 string strDir = ClaudeDir();
                 if (strDir == null) return null;
                 string strSession = null;
-                foreach (uint intPid in cConsoleInput.ConsoleProcesses(ahwndTerminal)) {
+                foreach (uint intPid in alstPids) {
                     string strFile = Path.Combine(Path.Combine(strDir, "sessions"), intPid + ".json");
                     if (!File.Exists(strFile)) continue;
                     Match m = RX_SESSION.Match(ReadShared(strFile));
@@ -161,7 +170,7 @@ namespace AgentDockStandalone {
         }
 
         // The last CNST_TAIL_BYTES of the file as whole lines. Claude has it open, so share it.
-        private static IEnumerable<string> ReadTailLines(string astrFile) {
+        internal static IEnumerable<string> ReadTailLines(string astrFile) {
             byte[] buf;
             using (FileStream fs = new FileStream(astrFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) {
                 long lngStart = Math.Max(0, fs.Length - CNST_TAIL_BYTES);
@@ -186,7 +195,7 @@ namespace AgentDockStandalone {
             }
         }
 
-        private static string ReadShared(string astrFile) {
+        internal static string ReadShared(string astrFile) {
             using (FileStream fs = new FileStream(astrFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             using (StreamReader sr = new StreamReader(fs, Encoding.UTF8)) {
                 return sr.ReadToEnd();
