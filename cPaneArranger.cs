@@ -130,7 +130,21 @@ namespace AgentDockShared {
             if (ahwndClicked == IntPtr.Zero) return;
             foreach (Form f in OrderedPanes()) {
                 IntPtr h = f.Handle;
-                if (h == ahwndClicked || IsChild(h, ahwndClicked)) { mfrmLastClicked = f; return; }
+                if (h == ahwndClicked || IsChild(h, ahwndClicked)) {
+                    mfrmLastClicked = f;
+                    // Make it the active pane as well (Story 6826). Otherwise, when the dock comes
+                    // forward, Windows gives the keyboard back to the old active pane, and that
+                    // focus change made the old pane current again: a click inside a terminal
+                    // (title bars hidden) never moved the compose box's target. Posted, because
+                    // this can run inside a low-level hook, which must return at once.
+                    if (mfrmHost.ActiveMdiChild != f && !f.IsDisposed) {
+                        Form frmPane = f;
+                        mfrmHost.BeginInvoke(new MethodInvoker(delegate {
+                            if (!frmPane.IsDisposed && mfrmLastClicked == frmPane) frmPane.Activate();
+                        }));
+                    }
+                    return;
+                }
             }
         }
 
@@ -410,7 +424,10 @@ namespace AgentDockShared {
                     bool blnCtrl  = Down(VK_CONTROL);
                     bool blnShift = Down(VK_SHIFT);
                     Action act = null;
-                    if (blnCtrl && blnShift) {
+                    if (IsEditingKey(k.vkCode) && DockTextBoxHasFocus()) {
+                        // Typing in the dock's own text box (the compose box): Ctrl+Shift+Arrow
+                        // selects a word there, so the dock leaves editing keys alone (Story 6826).
+                    } else if (blnCtrl && blnShift) {
                         if (k.vkCode == VK_LEFT)       act = delegate { MovePane(-1); };
                         else if (k.vkCode == VK_RIGHT) act = delegate { MovePane(1); };
                         else if (k.vkCode == VK_M)     act = delegate { ToggleMaximize(); };
@@ -434,6 +451,19 @@ namespace AgentDockShared {
             return (GetAsyncKeyState(aintVk) & 0x8000) != 0;
         }
 
+        // Keys a text box uses for moving and selecting: arrows, Home, End, Page Up / Down.
+        private static bool IsEditingKey(int aintVk) {
+            return aintVk >= VK_PRIOR && aintVk <= VK_DOWN;
+        }
+
+        // The hook runs on the dock's own thread, so GetFocus names the dock control that has
+        // the keyboard. A terminal pane is another process and never counts.
+        private static bool DockTextBoxHasFocus() {
+            IntPtr h = GetFocus();
+            if (h == IntPtr.Zero) return false;
+            return Control.FromHandle(h) is TextBoxBase;
+        }
+
         // -------------------------------------------------------------------
         // Win32 -- kept here so this file needs nothing from either dock's Win32.cs
 
@@ -443,6 +473,8 @@ namespace AgentDockShared {
         private const int VK_SHIFT       = 0x10;
         private const int VK_CONTROL     = 0x11;
         private const int VK_MENU        = 0x12;
+        private const int VK_PRIOR       = 0x21;   // Page Up; 0x21..0x28 is PgUp PgDn End Home Left Up Right Down
+        private const int VK_DOWN        = 0x28;
         private const int VK_LEFT        = 0x25;
         private const int VK_RIGHT       = 0x27;
         private const int VK_M           = 0x4D;
@@ -473,6 +505,9 @@ namespace AgentDockShared {
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetFocus();
 
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);

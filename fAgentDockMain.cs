@@ -102,6 +102,7 @@ namespace AgentDockStandalone {
             base.OnLoad(e);
             InstallMouseHook();
             InstallFocusHook();
+            StartClickPoll();
             mPanes.InstallKeyboardHook();
             // Ctrl+Shift+U works while a terminal has the keyboard (the arranger's hook).
             mPanes.AddChord(Keys.U, delegate { UnparentActivePane(); });
@@ -130,6 +131,7 @@ namespace AgentDockStandalone {
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e) {
+            mtmrClickPoll.Stop();
             UninstallMouseHook();
             if (mAdminSwap != null) mAdminSwap.Dispose();
             mPanes.Dispose();
@@ -167,6 +169,37 @@ namespace AgentDockStandalone {
         // low-level mouse hook, Windows never drops this one, and it also follows keyboard moves.
         private WinEventProc mFocusHookProc;
         private IntPtr       mFocusHookId = IntPtr.Zero;
+
+        // A third way, and the one that cannot fail (Story 6826): look at the mouse buttons 25 times
+        // a second, and when one goes down over a pane, that pane is the current one. Tony found
+        // clicks inside a terminal still did not move the compose box's target with title bars
+        // hidden (a title bar click did, through the focus hook), so the hook alone is not trusted.
+        private readonly Timer mtmrClickPoll = new Timer();
+        private bool           mblnButtonWasDown;
+
+        private void StartClickPoll() {
+            mtmrClickPoll.Interval = 40;
+            mtmrClickPoll.Tick    += delegate { PollClick(); };
+            mtmrClickPoll.Start();
+        }
+
+        private void PollClick() {
+            bool blnDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0
+                        || (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+            if (blnDown && !mblnButtonWasDown && mPanes != null) {
+                Point pt = Cursor.Position;
+                Win32.POINT wp = new Win32.POINT();
+                wp.x = pt.X; wp.y = pt.Y;
+                IntPtr h = Win32.WindowFromPoint(wp);
+                if (h != IntPtr.Zero && Win32.GetAncestor(h, Win32.GA_ROOT) == this.Handle) mPanes.NoteClick(h);
+            }
+            mblnButtonWasDown = blnDown;
+        }
+
+        private const int VK_LBUTTON = 0x01;
+        private const int VK_RBUTTON = 0x02;
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
 
         private void InstallFocusHook() {
             mFocusHookProc = new WinEventProc(FocusHookCallback);

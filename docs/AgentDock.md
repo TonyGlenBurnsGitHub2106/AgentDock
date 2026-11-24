@@ -92,7 +92,8 @@ also run `update.cmd` by hand with the dock closed.
 - **Tile Vertical**, **Tile Horizontal**, **Cascade**, **Quadrant Layout**: lay the panes out.
 - **Reorder Panes**: a list of the panes in order. Select one, Move Up / Move Down, OK.
 - **Reverse Pane Order**: flips the order.
-- **Move Pane Earlier** (Ctrl+Shift+Left) / **Move Pane Later** (Ctrl+Shift+Right): moves the pane you last clicked.
+- **Move Pane Earlier** (Ctrl+Shift+Left) / **Move Pane Later** (Ctrl+Shift+Right): moves the pane you last clicked. While you are writing in the compose box these keys select words
+there instead.
 - **Maximize / Restore Pane** (Ctrl+Shift+M): the pane you last clicked fills the dock. The same again puts the tiling back.
 
 ### Settings
@@ -118,7 +119,9 @@ no compose box at all.
 
 It is a plain Windows text box across the bottom of the dock. Write your prompt there the way
 you write in any Windows app: click anywhere in the text, select with the mouse, Ctrl+A, Ctrl+X,
-Ctrl+C, Ctrl+V, Ctrl+Z.
+Ctrl+C, Ctrl+V, Ctrl+Z. The usual keys move and select: Ctrl+Left / Right by word, Home / End,
+Ctrl+Home / End, and with Shift each of them selects (Ctrl+Shift+Left selects a word, Ctrl+Shift+End
+to the end).
 
 - **Enter** (or **Send**) types the prompt into the agent of the pane you last clicked and sends
   it. The box empties and is ready for the next one.
