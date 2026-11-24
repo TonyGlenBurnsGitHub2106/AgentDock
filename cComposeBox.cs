@@ -119,7 +119,11 @@ namespace AgentDockStandalone {
             this.Controls.Add(pnlRight);
 
             tmrTarget.Interval = 400;
-            tmrTarget.Tick    += delegate { ShowTarget(); };
+            tmrTarget.Tick    += delegate {
+                ShowTarget();
+                if (++mintTicks % CNST_SAMPLE_EVERY_TICKS == 0) SampleTabColors();
+            };
+            cboTarget.DropDown += delegate { SampleTabColors(); };
         }
 
         // Shows or hides the box. Hidden, it does nothing at all.
@@ -139,6 +143,22 @@ namespace AgentDockStandalone {
             public readonly string Caption;
             public TargetItem(Form afrm, int aintNumber) { Pane = afrm; Caption = aintNumber + ". " + afrm.Text; }
             public override string ToString() { return Caption; }
+        }
+
+        // Every few ticks, and when the list opens, the panes' tab colors are read off the screen
+        // (cPaneColors.SampleFromScreen), only while the dock is the window in front.
+        private const int CNST_SAMPLE_EVERY_TICKS = 5;
+        private int mintTicks;
+
+        private void SampleTabColors() {
+            Form frmDock = this.FindForm();
+            if (frmDock == null || !frmDock.IsHandleCreated || Win32.GetForegroundWindow() != frmDock.Handle) return;
+            bool blnChanged = false;
+            foreach (Form f in mfncPanes()) {
+                fAgentAbsorbedTerminal abs = f as fAgentAbsorbedTerminal;
+                if (abs != null && cPaneColors.SampleFromScreen(abs.AbsorbedHwnd)) blnChanged = true;
+            }
+            if (blnChanged) cboTarget.Invalidate();
         }
 
         // Draws a Send to entry on its pane's tab color, with black or white text, whichever

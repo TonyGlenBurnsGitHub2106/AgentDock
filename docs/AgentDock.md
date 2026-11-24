@@ -161,10 +161,8 @@ to the end).
 - **Send to**, under **Send**, lists the panes and shows which one the prompt goes to. It follows
   the pane you click in. Pick a different pane in the list to send there instead.
   Each pane is listed by its terminal's title, so renaming a tab in Windows Terminal renames
-  the pane in the list too. Each pane is shown in its tab's color. Windows Terminal cannot be
-  asked a tab's color, so the dock remembers the color it gave each pane. A pane opened before
-  version 1.0.31 may show a color that does not match its tab, or none. Panes opened from then on
-  match, and keep their color through an update.
+  the pane in the list too. Each pane is shown in its tab's color, read from the tab itself
+  while the dock is in front (a newly opened pane may take a couple of seconds to get its color).
 - You can still type in the terminals directly. The answers show in the panes as always.
 
 If a prompt cannot be sent, it stays in the box and the status bar says why. A pane running as

@@ -61,6 +61,78 @@ namespace AgentDockStandalone {
             Save();
         }
 
+        // Reads the tab's real color off the screen and remembers it (Story 6828, second try).
+        // What the dock chose is not always what the tab shows: a tab started with its own color
+        // ignores a later recolor, and an absorbed tab shows its color scheme's version of the
+        // color. Each pane shows its Windows Terminal tab row at the top, and the selected tab is
+        // filled with the tab color, so the most common strongly colored pixel there is it.
+        // Call only while the dock is in front, so nothing covers the panes. Returns true when the
+        // remembered color changed.
+        public static bool SampleFromScreen(IntPtr ahwnd) {
+            try {
+                if (ahwnd == IntPtr.Zero || !Win32.IsWindowVisible(ahwnd) || IsIconic(ahwnd)) return false;
+                RECT r;
+                if (!GetWindowRect(ahwnd, out r)) return false;
+                int intDpi = 96;
+                try { intDpi = (int)GetDpiForWindow(ahwnd); } catch (EntryPointNotFoundException) { }
+                if (intDpi <= 0) intDpi = 96;
+                int intWidth  = Math.Min(r.Right - r.Left, 320 * intDpi / 96);
+                int intHeight = Math.Min(r.Bottom - r.Top, 40 * intDpi / 96);
+                if (intWidth < 20 || intHeight < 10) return false;
+                Color clr;
+                using (Bitmap bmp = new Bitmap(intWidth, intHeight)) {
+                    using (Graphics g = Graphics.FromImage(bmp))
+                        g.CopyFromScreen(r.Left, r.Top, 0, 0, bmp.Size);
+                    clr = MostCommonStrongColor(bmp);
+                }
+                if (clr.IsEmpty) return false;
+                string strHex = ColorTranslator.ToHtml(Color.FromArgb(clr.R, clr.G, clr.B));
+                if (strHex.Length != 7) return false;
+                string strOld;
+                if (Colors().TryGetValue(ahwnd.ToInt64(), out strOld)
+                    && String.Equals(strOld, strHex, StringComparison.OrdinalIgnoreCase)) return false;
+                Remember(ahwnd, strHex);
+                return true;
+            } catch (Exception) {
+                return false;
+            }
+        }
+
+        // The most common clearly colored (not gray, black or white) pixel, when enough of them
+        // agree to be a tab and not an icon. Color.Empty otherwise.
+        private static Color MostCommonStrongColor(Bitmap abmp) {
+            Dictionary<int, int> dicCount = new Dictionary<int, int>();
+            for (int y = 0; y < abmp.Height; y++) {
+                for (int x = 0; x < abmp.Width; x++) {
+                    Color c = abmp.GetPixel(x, y);
+                    int intMax = Math.Max(c.R, Math.Max(c.G, c.B));
+                    int intMin = Math.Min(c.R, Math.Min(c.G, c.B));
+                    if (intMax - intMin < 60 || intMax < 60) continue;
+                    int intKey = (c.R << 16) | (c.G << 8) | c.B;
+                    int n;
+                    dicCount.TryGetValue(intKey, out n);
+                    dicCount[intKey] = n + 1;
+                }
+            }
+            int intBest = -1, intBestCount = 0;
+            foreach (KeyValuePair<int, int> kv in dicCount)
+                if (kv.Value > intBestCount) { intBest = kv.Key; intBestCount = kv.Value; }
+            if (intBestCount < 200) return Color.Empty;
+            return Color.FromArgb((intBest >> 16) & 0xFF, (intBest >> 8) & 0xFF, intBest & 0xFF);
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct RECT { public int Left, Top, Right, Bottom; }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr hWnd);
+
         // The pane's tab color, or Color.Empty when the dock does not know it.
         public static Color ColorOf(IntPtr ahwnd) {
             string strHex;
