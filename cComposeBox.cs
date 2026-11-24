@@ -22,6 +22,7 @@ namespace AgentDockStandalone {
 
         private readonly TextBox txtPrompt = new TextBox();
         private readonly Button  btnSend   = new Button();
+        private readonly Button  btnAnswer = new Button();
         private readonly Label    lblTarget = new Label();
         private readonly ComboBox cboTarget = new ComboBox();
         private readonly Timer   tmrTarget = new Timer();
@@ -60,9 +61,26 @@ namespace AgentDockStandalone {
             pnlRight.Padding = new Padding(6, 0, 0, 0);
 
             btnSend.Text   = "Send";
-            btnSend.Dock   = DockStyle.Top;
-            btnSend.Height = 30;
+            btnSend.Dock   = DockStyle.Fill;
             btnSend.Click += delegate { Send(); txtPrompt.Focus(); };
+
+            // Popup Answer (Story 6828), beside Send: the target pane's latest answer in a window
+            // you can select, edit and copy in.
+            btnAnswer.Text   = "Popup Answer";
+            btnAnswer.Dock   = DockStyle.Right;
+            btnAnswer.Click += delegate { PopupAnswer(); };
+
+            // Send and Popup Answer share the top row, half each, whatever the width.
+            Panel pnlButtons = new Panel();
+            pnlButtons.Dock   = DockStyle.Top;
+            pnlButtons.Height = 30;
+            Panel pnlGap = new Panel();
+            pnlGap.Dock  = DockStyle.Right;
+            pnlGap.Width = 4;
+            pnlButtons.Controls.Add(btnSend);
+            pnlButtons.Controls.Add(pnlGap);
+            pnlButtons.Controls.Add(btnAnswer);
+            pnlButtons.Resize += delegate { btnAnswer.Width = Math.Max(40, (pnlButtons.Width - pnlGap.Width) / 2); };
 
             // Send to: the pane a prompt goes to. It follows the pane you click in, and picking
             // one here does the same as clicking in it.
@@ -89,7 +107,7 @@ namespace AgentDockStandalone {
 
             pnlRight.Controls.Add(cboTarget);
             pnlRight.Controls.Add(lblTarget);
-            pnlRight.Controls.Add(btnSend);
+            pnlRight.Controls.Add(pnlButtons);
 
             txtPrompt.Multiline     = true;
             txtPrompt.AcceptsReturn = true;
@@ -143,6 +161,31 @@ namespace AgentDockStandalone {
             public readonly string Caption;
             public TargetItem(Form afrm, int aintNumber) { Pane = afrm; Caption = aintNumber + ". " + afrm.Text; }
             public override string ToString() { return Caption; }
+        }
+
+        // Popup Answer: the target pane's most recent answer, read from its agent's own record
+        // (cAgentHistory.LastAnswerForPane), in fAnswerPopup.
+        private void PopupAnswer() {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            if (pane == null) {
+                mactStatus("Pick a pane in Send to (or click inside one) first.");
+                return;
+            }
+            string strAnswer;
+            Cursor curOld = Cursor.Current;
+            Cursor.Current = Cursors.WaitCursor;
+            try { strAnswer = cAgentHistory.LastAnswerForPane(pane.AbsorbedHwnd); }
+            finally { Cursor.Current = curOld; }
+            if (String.IsNullOrEmpty(strAnswer)) {
+                MessageBox.Show(this.FindForm(), "No answer was found for " + pane.Text + ".\r\n\r\n"
+                    + "The dock reads answers from Claude Code and GitHub Copilot CLI. The agent in this pane "
+                    + "may not have answered yet, or keeps no record the dock can read.",
+                    "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            using (fAnswerPopup dlg = new fAnswerPopup(pane.Text, strAnswer)) {
+                dlg.ShowDialog(this.FindForm());
+            }
         }
 
         // Every few ticks, and when the list opens, the panes' tab colors are read off the screen

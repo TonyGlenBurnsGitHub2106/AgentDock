@@ -163,6 +163,13 @@ to the end).
   Each pane is listed by its terminal's title, so renaming a tab in Windows Terminal renames
   the pane in the list too. Each pane is shown in its tab's color, read from the tab itself
   while the dock is in front (a newly opened pane may take a couple of seconds to get its color).
+- **Popup Answer**, beside **Send**, opens the most recent answer of the pane in Send to in a
+  window of its own. It is a plain text box like the compose box: click anywhere, select with the
+  mouse or the usual keys, edit it. **Copy** puts the whole text, with your edits, on the clipboard.
+  Close it with **Close** or Escape (Escape asks first if you changed the text). Your edits are not
+  kept anywhere. It reads the answer from Claude Code's or GitHub Copilot CLI's own record of the
+  session, so it shows the answer as the agent wrote it, without the terminal's wrapping. While the
+  agent is still working, it shows the latest thing it has written so far.
 - You can still type in the terminals directly. The answers show in the panes as always.
 
 If a prompt cannot be sent, it stays in the box and the status bar says why. A pane running as

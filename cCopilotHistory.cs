@@ -51,6 +51,41 @@ namespace AgentDockStandalone {
             }
         }
 
+        // The pane's most recent Copilot answer (Story 6828, Popup Answer): the last
+        // assistant.message with text in its newest session. Null when none is found.
+        public static string LastAnswerForPids(List<uint> alstPids) {
+            try {
+                string strDir = CopilotDir();
+                if (strDir == null || alstPids == null) return null;
+                string strStates = Path.Combine(strDir, "session-state");
+                if (!Directory.Exists(strStates)) return null;
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = Int32.MaxValue;
+                foreach (uint intPid in alstPids) {
+                    List<string> lstSessions = SessionsOf(strDir, strStates, intPid);
+                    for (int i = lstSessions.Count - 1; i >= 0; i--) {
+                        string strFile = Path.Combine(Path.Combine(strStates, lstSessions[i]), "events.jsonl");
+                        if (!File.Exists(strFile)) strFile = Path.Combine(strStates, lstSessions[i] + ".jsonl");
+                        if (!File.Exists(strFile)) continue;
+                        string strLast = null;
+                        foreach (string strLine in cAgentHistory.ReadTailLines(strFile)) {
+                            if (strLine.IndexOf("assistant.message", StringComparison.Ordinal) < 0) continue;
+                            Dictionary<string, object> row;
+                            try { row = js.DeserializeObject(strLine) as Dictionary<string, object>; } catch (Exception) { continue; }
+                            if (row == null || !"assistant.message".Equals(row.ContainsKey("type") ? row["type"] as string : null)) continue;
+                            Dictionary<string, object> data = row.ContainsKey("data") ? row["data"] as Dictionary<string, object> : null;
+                            string strText = data != null && data.ContainsKey("content") ? data["content"] as string : null;
+                            if (!String.IsNullOrEmpty(strText) && strText.Trim().Length > 0) strLast = strText;
+                        }
+                        if (strLast != null) return strLast;
+                    }
+                }
+                return null;
+            } catch (Exception) {
+                return null;
+            }
+        }
+
         private static string CopilotDir() {
             string strDir = Environment.GetEnvironmentVariable("COPILOT_HOME");
             if (String.IsNullOrEmpty(strDir)) {

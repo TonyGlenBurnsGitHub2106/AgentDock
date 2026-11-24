@@ -41,18 +41,95 @@ namespace AgentDockStandalone {
             try {
                 string strDir = ClaudeDir();
                 if (strDir == null) return null;
-                string strSession = null;
-                foreach (uint intPid in alstPids) {
-                    string strFile = Path.Combine(Path.Combine(strDir, "sessions"), intPid + ".json");
-                    if (!File.Exists(strFile)) continue;
-                    Match m = RX_SESSION.Match(ReadShared(strFile));
-                    if (m.Success) { strSession = m.Groups[1].Value; break; }
-                }
+                string strSession = ClaudeSession(strDir, alstPids);
                 if (strSession == null) return null;
                 return ReadSessions(strDir, SessionChain(strDir, strSession), aintMax);
             } catch (Exception) {
                 return null;
             }
+        }
+
+        // The session id of the Claude running as one of these processes, or null.
+        private static string ClaudeSession(string astrDir, List<uint> alstPids) {
+            foreach (uint intPid in alstPids) {
+                string strFile = Path.Combine(Path.Combine(astrDir, "sessions"), intPid + ".json");
+                if (!File.Exists(strFile)) continue;
+                Match m = RX_SESSION.Match(ReadShared(strFile));
+                if (m.Success) return m.Groups[1].Value;
+            }
+            return null;
+        }
+
+        // The transcript of a Claude session, projects\<folder>\<id>.jsonl, or null.
+        private static string TranscriptFile(string astrDir, string astrSession) {
+            if (astrSession.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return null;
+            string strProjects = Path.Combine(astrDir, "projects");
+            if (!Directory.Exists(strProjects)) return null;
+            foreach (string strFolder in Directory.GetDirectories(strProjects)) {
+                string strFile = Path.Combine(strFolder, astrSession + ".jsonl");
+                if (File.Exists(strFile)) return strFile;
+            }
+            return null;
+        }
+
+        // ------------------------------------------------------------ the last answer
+
+        // The agent's most recent answer in the pane (Story 6828, Popup Answer), or null when none
+        // is found. Claude Code: the last assistant message with text in the session's transcript.
+        // Copilot CLI: the last assistant.message in its session record (cCopilotHistory).
+        public static string LastAnswerForPane(IntPtr ahwndTerminal) {
+            List<uint> lstPids;
+            try { lstPids = cConsoleInput.ConsoleProcesses(ahwndTerminal); } catch (Exception) { return null; }
+            string str = ClaudeLastAnswer(lstPids);
+            if (str != null) return str;
+            return cCopilotHistory.LastAnswerForPids(lstPids);
+        }
+
+        // One answer can be written as several transcript lines (one per content block) that share
+        // a message id, so the text blocks of the last message that has text are joined.
+        private static string ClaudeLastAnswer(List<uint> alstPids) {
+            try {
+                string strDir = ClaudeDir();
+                if (strDir == null) return null;
+                string strSession = ClaudeSession(strDir, alstPids);
+                if (strSession == null) return null;
+                string strFile = TranscriptFile(strDir, strSession);
+                if (strFile == null) return null;
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = Int32.MaxValue;
+                string strLastId = null;
+                List<string> lstText = new List<string>();
+                foreach (string strLine in ReadTailLines(strFile)) {
+                    if (strLine.IndexOf("\"assistant\"", StringComparison.Ordinal) < 0) continue;
+                    Dictionary<string, object> row;
+                    try { row = js.DeserializeObject(strLine) as Dictionary<string, object>; } catch (Exception) { continue; }
+                    if (row == null || !"assistant".Equals(Str(row, "type"))) continue;
+                    if (row.ContainsKey("isSidechain") && true.Equals(row["isSidechain"])) continue;
+                    Dictionary<string, object> msg = row.ContainsKey("message") ? row["message"] as Dictionary<string, object> : null;
+                    if (msg == null) continue;
+                    object[] blocks = msg.ContainsKey("content") ? msg["content"] as object[] : null;
+                    if (blocks == null) continue;
+                    List<string> lstHere = new List<string>();
+                    foreach (object o in blocks) {
+                        Dictionary<string, object> b = o as Dictionary<string, object>;
+                        if (b != null && "text".Equals(Str(b, "type")) && !String.IsNullOrEmpty(Str(b, "text")))
+                            lstHere.Add(Str(b, "text"));
+                    }
+                    if (lstHere.Count == 0) continue;
+                    string strId = Str(msg, "id");
+                    if (strId == null || strId != strLastId) lstText.Clear();
+                    strLastId = strId;
+                    lstText.AddRange(lstHere);
+                }
+                return lstText.Count == 0 ? null : String.Join("\n\n", lstText.ToArray());
+            } catch (Exception) {
+                return null;
+            }
+        }
+
+        private static string Str(Dictionary<string, object> adic, string astrKey) {
+            object o;
+            return adic.TryGetValue(astrKey, out o) ? o as string : null;
         }
 
         private static string ClaudeDir() {

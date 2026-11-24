@@ -65,6 +65,9 @@
     <Compile Include="cPaneArranger.cs" />
     <Compile Include="cTabColor.cs" />
     <Compile Include="cPaneColors.cs" />
+    <Compile Include="fAnswerPopup.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="cAgentHistory.cs" />
     <Compile Include="cCopilotHistory.cs" />
     <Compile Include="cConsoleInput.cs" />
