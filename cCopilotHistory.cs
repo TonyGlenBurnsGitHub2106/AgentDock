@@ -86,6 +86,45 @@ namespace AgentDockStandalone {
             }
         }
 
+        // The pane's Copilot conversation, oldest first (Story 6828): user.message and
+        // assistant.message lines in order, or only the answers. Null when no session is found.
+        public static List<cHistoryEntry> ConversationForPids(List<uint> alstPids, bool ablnAnswersOnly) {
+            try {
+                string strDir = CopilotDir();
+                if (strDir == null || alstPids == null) return null;
+                string strStates = Path.Combine(strDir, "session-state");
+                if (!Directory.Exists(strStates)) return null;
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = Int32.MaxValue;
+                foreach (uint intPid in alstPids) {
+                    List<string> lstSessions = SessionsOf(strDir, strStates, intPid);
+                    if (lstSessions.Count == 0) continue;
+                    List<cHistoryEntry> lst = new List<cHistoryEntry>();
+                    foreach (string strSession in lstSessions) {
+                        string strFile = Path.Combine(Path.Combine(strStates, strSession), "events.jsonl");
+                        if (!File.Exists(strFile)) strFile = Path.Combine(strStates, strSession + ".jsonl");
+                        if (!File.Exists(strFile)) continue;
+                        foreach (string strLine in cAgentHistory.ReadTailLines(strFile)) {
+                            if (strLine.IndexOf(".message", StringComparison.Ordinal) < 0) continue;
+                            Dictionary<string, object> row;
+                            try { row = js.DeserializeObject(strLine) as Dictionary<string, object>; } catch (Exception) { continue; }
+                            string strType = row != null && row.ContainsKey("type") ? row["type"] as string : null;
+                            bool blnAnswer = "assistant.message".Equals(strType);
+                            if (!blnAnswer && (ablnAnswersOnly || !"user.message".Equals(strType))) continue;
+                            Dictionary<string, object> data = row.ContainsKey("data") ? row["data"] as Dictionary<string, object> : null;
+                            string strText = data != null && data.ContainsKey("content") ? data["content"] as string : null;
+                            if (String.IsNullOrEmpty(strText) || strText.Trim().Length == 0) continue;
+                            lst.Add(new cHistoryEntry(strText, blnAnswer));
+                        }
+                    }
+                    if (lst.Count > 0) return lst;
+                }
+                return null;
+            } catch (Exception) {
+                return null;
+            }
+        }
+
         private static string CopilotDir() {
             string strDir = Environment.GetEnvironmentVariable("COPILOT_HOME");
             if (String.IsNullOrEmpty(strDir)) {

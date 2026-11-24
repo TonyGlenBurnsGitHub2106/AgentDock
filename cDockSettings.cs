@@ -40,8 +40,12 @@ namespace AgentDockStandalone {
         // The width of the Send / Send to area at the right of the compose box, set by dragging
         // the bar between it and the text (Story 6828).
         public const string KEY_COMPOSE_SEND_WIDTH = "ComposeSendWidth";
-        private const int   DEFAULT_COMPOSE_SEND_WIDTH = 170;
+        private const int   DEFAULT_COMPOSE_SEND_WIDTH = 240;
         public const int    CNST_COMPOSE_SEND_MIN_WIDTH = 90;
+
+        // What the compose box's Up arrow steps through (Story 6828): Prompts (your prompts, the
+        // default), Conversation (prompts and answers) or Answers. Chosen in the box itself.
+        public const string KEY_COMPOSE_UP_MODE = "ComposeUpMode";
 
         private static readonly Dictionary<string, string> mdicValues =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -83,6 +87,22 @@ namespace AgentDockStandalone {
                     return intWidth;
                 return DEFAULT_COMPOSE_SEND_WIDTH;
             }
+        }
+
+        public static eUpMode ComposeUpMode {
+            get {
+                string strValue;
+                if (mdicValues.TryGetValue(KEY_COMPOSE_UP_MODE, out strValue)) {
+                    if (String.Equals(strValue, "Conversation", StringComparison.OrdinalIgnoreCase)) return eUpMode.Conversation;
+                    if (String.Equals(strValue, "Answers", StringComparison.OrdinalIgnoreCase)) return eUpMode.Answers;
+                }
+                return eUpMode.Prompts;
+            }
+        }
+
+        public static void SaveComposeUpMode(eUpMode aeMode) {
+            mdicValues[KEY_COMPOSE_UP_MODE] = aeMode.ToString();
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
         }
 
         // Remembers the width of the Send area, keeping every other setting as it is.
@@ -217,7 +237,11 @@ namespace AgentDockStandalone {
                  + "\r\n"
                  + "# The width in pixels of the Send area at the right of the compose box. Set it by dragging\r\n"
                  + "#   the bar between the text and the Send button.\r\n"
-                 + KEY_COMPOSE_SEND_WIDTH + " = " + ComposeSendWidth + "\r\n";
+                 + KEY_COMPOSE_SEND_WIDTH + " = " + ComposeSendWidth + "\r\n"
+                 + "\r\n"
+                 + "# What Up steps through in the compose box: Prompts (yours, the default), Conversation\r\n"
+                 + "#   (your prompts and the agent's answers) or Answers. Chosen in the compose box.\r\n"
+                 + KEY_COMPOSE_UP_MODE + " = " + ComposeUpMode + "\r\n";
         }
     }
 }

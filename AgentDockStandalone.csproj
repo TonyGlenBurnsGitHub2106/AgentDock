@@ -70,6 +70,7 @@
     </Compile>
     <Compile Include="cAgentHistory.cs" />
     <Compile Include="cCopilotHistory.cs" />
+    <Compile Include="cHistoryEntry.cs" />
     <Compile Include="cConsoleInput.cs" />
     <Compile Include="cComposeBox.cs" />
     <Compile Include="cAdminSwap.cs" />

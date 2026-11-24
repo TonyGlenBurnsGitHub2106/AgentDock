@@ -23,6 +23,8 @@ namespace AgentDockStandalone {
         private readonly TextBox txtPrompt = new TextBox();
         private readonly Button  btnSend   = new Button();
         private readonly Button  btnAnswer = new Button();
+        private readonly Button  btnCopy   = new Button();
+        private readonly ComboBox cboUpMode = new ComboBox();
         private readonly Label    lblTarget = new Label();
         private readonly ComboBox cboTarget = new ComboBox();
         private readonly Timer   tmrTarget = new Timer();
@@ -67,28 +69,61 @@ namespace AgentDockStandalone {
             // Popup Answer (Story 6828), beside Send: the target pane's latest answer in a window
             // you can select, edit and copy in.
             btnAnswer.Text   = "Popup Answer";
-            btnAnswer.Dock   = DockStyle.Right;
+            btnAnswer.Dock   = DockStyle.Fill;
             btnAnswer.Click += delegate { PopupAnswer(); };
 
-            // Send and Popup Answer share the top row, half each, whatever the width.
-            Panel pnlButtons = new Panel();
-            pnlButtons.Dock   = DockStyle.Top;
-            pnlButtons.Height = 30;
-            Panel pnlGap = new Panel();
-            pnlGap.Dock  = DockStyle.Right;
-            pnlGap.Width = 4;
-            pnlButtons.Controls.Add(btnSend);
-            pnlButtons.Controls.Add(pnlGap);
-            pnlButtons.Controls.Add(btnAnswer);
-            pnlButtons.Resize += delegate { btnAnswer.Width = Math.Max(40, (pnlButtons.Width - pnlGap.Width) / 2); };
+            // Copy (Story 6828): what is selected in the box, or all of it when nothing is.
+            btnCopy.Text   = "Copy";
+            btnCopy.Dock   = DockStyle.Fill;
+            btnCopy.Click += delegate { CopySelection(); };
+
+            // Send, Popup Answer and Copy share the top row, whatever the width.
+            TableLayoutPanel tblButtons = new TableLayoutPanel();
+            tblButtons.Dock        = DockStyle.Top;
+            tblButtons.Height      = 30;
+            tblButtons.ColumnCount = 3;
+            tblButtons.RowCount    = 1;
+            tblButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
+            tblButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45F));
+            tblButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tblButtons.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            foreach (Button b in new Button[] { btnSend, btnAnswer, btnCopy }) b.Margin = new Padding(0, 0, 3, 0);
+            btnCopy.Margin = new Padding(0);
+            tblButtons.Controls.Add(btnSend, 0, 0);
+            tblButtons.Controls.Add(btnAnswer, 1, 0);
+            tblButtons.Controls.Add(btnCopy, 2, 0);
 
             // Send to: the pane a prompt goes to. It follows the pane you click in, and picking
             // one here does the same as clicking in it.
             lblTarget.Text      = "Send to:";
-            lblTarget.Dock      = DockStyle.Top;
-            lblTarget.Height    = 20;
+            lblTarget.AutoSize  = true;
+            lblTarget.Dock      = DockStyle.Left;
             lblTarget.ForeColor = SystemColors.GrayText;
             lblTarget.TextAlign = ContentAlignment.BottomLeft;
+            lblTarget.Padding   = new Padding(0, 6, 0, 0);
+
+            // What Up steps through (Story 6828), small, at the right of the Send to label.
+            cboUpMode.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboUpMode.Dock          = DockStyle.Right;
+            cboUpMode.Width         = 130;
+            cboUpMode.DropDownWidth = 170;
+            cboUpMode.Items.AddRange(new object[] { "Up: my prompts", "Up: conversation", "Up: answers" });
+            cboUpMode.SelectedIndex = (int)cDockSettings.ComposeUpMode;
+            cboUpMode.SelectedIndexChanged += delegate {
+                eUpMode eMode = (eUpMode)Math.Max(0, cboUpMode.SelectedIndex);
+                try { cDockSettings.SaveComposeUpMode(eMode); } catch { /* not remembered, no harm */ }
+                // Stepping starts over in the new list. What you were writing comes back.
+                if (mintHistoryAt >= 0) { mintHistoryAt = -1; SetPrompt(mstrDraft); }
+                mactStatus("Up now steps through " + UpModeWords(eMode) + ".");
+            };
+            cboUpMode.DropDownClosed += delegate { txtPrompt.Focus(); };
+
+            Panel pnlLabelRow = new Panel();
+            pnlLabelRow.Dock    = DockStyle.Top;
+            pnlLabelRow.Height  = 28;
+            pnlLabelRow.Padding = new Padding(0, 2, 0, 4);
+            pnlLabelRow.Controls.Add(lblTarget);
+            pnlLabelRow.Controls.Add(cboUpMode);
 
             cboTarget.Dock          = DockStyle.Top;
             cboTarget.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -106,8 +141,8 @@ namespace AgentDockStandalone {
             cboTarget.DrawItem  += new DrawItemEventHandler(Target_DrawItem);
 
             pnlRight.Controls.Add(cboTarget);
-            pnlRight.Controls.Add(lblTarget);
-            pnlRight.Controls.Add(pnlButtons);
+            pnlRight.Controls.Add(pnlLabelRow);
+            pnlRight.Controls.Add(tblButtons);
 
             txtPrompt.Multiline     = true;
             txtPrompt.AcceptsReturn = true;
@@ -291,12 +326,51 @@ namespace AgentDockStandalone {
         // prompts from its agent (cAgentHistory), so prompts typed straight into the terminal are
         // there too, in the order they were sent. A pane whose agent keeps no record the dock can
         // read uses the prompts sent from this box.
-        private List<string> mlstBrowse = new List<string>();
+        // What it holds follows the Up list beside Send to (Story 6828): your prompts (the
+        // default), the whole conversation, or only the agent's answers.
+        private List<cHistoryEntry> mlstBrowse = new List<cHistoryEntry>();
 
-        private List<string> HistoryForTarget() {
+        private eUpMode UpMode() {
+            return (eUpMode)Math.Max(0, cboUpMode.SelectedIndex);
+        }
+
+        private static string UpModeWords(eUpMode aeMode) {
+            if (aeMode == eUpMode.Conversation) return "the whole conversation";
+            if (aeMode == eUpMode.Answers) return "the agent's answers";
+            return "your prompts";
+        }
+
+        private List<cHistoryEntry> HistoryForTarget() {
             fAgentAbsorbedTerminal pane = mfncTarget();
-            List<string> lstAgent = pane == null ? null : cAgentHistory.ForPane(pane.AbsorbedHwnd, CNST_HISTORY_MAX);
-            return (lstAgent != null && lstAgent.Count > 0) ? lstAgent : new List<string>(mlstHistory);
+            eUpMode eMode = UpMode();
+            List<cHistoryEntry> lst = new List<cHistoryEntry>();
+            if (eMode == eUpMode.Prompts) {
+                List<string> lstAgent = pane == null ? null : cAgentHistory.ForPane(pane.AbsorbedHwnd, CNST_HISTORY_MAX);
+                if (lstAgent == null || lstAgent.Count == 0) lstAgent = new List<string>(mlstHistory);
+                foreach (string s in lstAgent) lst.Add(new cHistoryEntry(s, false));
+                return lst;
+            }
+            List<cHistoryEntry> lstConv = pane == null ? null
+                : cAgentHistory.ConversationForPane(pane.AbsorbedHwnd, CNST_CONVERSATION_MAX, eMode == eUpMode.Answers);
+            if (lstConv == null || lstConv.Count == 0)
+                mactStatus("No " + (eMode == eUpMode.Answers ? "answers" : "conversation")
+                    + " found for this pane. The dock reads Claude Code and GitHub Copilot CLI.");
+            return lstConv ?? lst;
+        }
+
+        private const int CNST_CONVERSATION_MAX = 200;
+
+        // Copy: the selection, or the whole box when nothing is selected.
+        private void CopySelection() {
+            string strText = txtPrompt.SelectionLength > 0 ? txtPrompt.SelectedText : txtPrompt.Text;
+            if (strText.Length == 0) { mactStatus("Nothing to copy."); txtPrompt.Focus(); return; }
+            try {
+                Clipboard.SetText(strText);
+                mactStatus(txtPrompt.SelectionLength > 0 ? "Copied the selection." : "Copied all of it (nothing was selected).");
+            } catch (Exception ex) {
+                mactStatus("Not copied: " + ex.Message);
+            }
+            txtPrompt.Focus();
         }
 
         private Form mfrmBrowsePane;           // the pane mlstBrowse came from
@@ -323,7 +397,14 @@ namespace AgentDockStandalone {
             }
             if (mintHistoryAt < 0 && !blnSwitched) mstrDraft = txtPrompt.Text;
             mintHistoryAt = intAt;
-            SetPrompt(mlstBrowse[intAt]);
+            cHistoryEntry entry = mlstBrowse[intAt];
+            SetPrompt(entry.Text);
+            // Up leaves the cursor at the top so the next Up steps again at once, Down at the end.
+            if (aintStep < 0) {
+                txtPrompt.SelectionStart = 0;
+                txtPrompt.ScrollToCaret();
+            }
+            mactStatus((entry.IsAnswer ? "Agent's answer" : "Your prompt") + ", " + (intAt + 1) + " of " + mlstBrowse.Count + ".");
             return true;
         }
 

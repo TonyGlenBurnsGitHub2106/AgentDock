@@ -152,15 +152,119 @@ namespace AgentDockStandalone {
         private static readonly Regex RX_FROM_ID = new Regex(@"""id""\s*:\s*""([^""]+)""");
 
         private static HashSet<string> SessionChain(string astrDir, string astrSession) {
-            HashSet<string> set = new HashSet<string>();
+            return new HashSet<string>(SessionChainNewestFirst(astrDir, astrSession));
+        }
+
+        // The same sessions in the order found: this one, then the one it came from, and so on.
+        private static List<string> SessionChainNewestFirst(string astrDir, string astrSession) {
+            List<string> lst = new List<string>();
             Queue<string> todo = new Queue<string>();
             todo.Enqueue(astrSession);
-            while (todo.Count > 0 && set.Count < CNST_CHAIN_MAX) {
+            while (todo.Count > 0 && lst.Count < CNST_CHAIN_MAX) {
                 string strId = todo.Dequeue();
-                if (!set.Add(strId)) continue;
+                if (lst.Contains(strId)) continue;
+                lst.Add(strId);
                 foreach (string strFrom in DerivedFrom(astrDir, strId)) todo.Enqueue(strFrom);
             }
-            return set;
+            return lst;
+        }
+
+        // ------------------------------------------------------------ the whole conversation
+
+        // The pane's conversation, oldest first, at most aintMax entries (Story 6828, what Up
+        // shows): the prompts you sent and the agent's answers, or with ablnAnswersOnly only the
+        // answers. Null when the agent keeps no record the dock can read.
+        public static List<cHistoryEntry> ConversationForPane(IntPtr ahwndTerminal, int aintMax, bool ablnAnswersOnly) {
+            List<uint> lstPids;
+            try { lstPids = cConsoleInput.ConsoleProcesses(ahwndTerminal); } catch (Exception) { return null; }
+            List<cHistoryEntry> lst = ClaudeConversation(lstPids, ablnAnswersOnly);
+            if (lst == null) lst = cCopilotHistory.ConversationForPids(lstPids, ablnAnswersOnly);
+            if (lst != null && lst.Count > aintMax) lst.RemoveRange(0, lst.Count - aintMax);
+            return lst;
+        }
+
+        // Claude Code: the transcripts of the session and the ones before it (a /clear), oldest
+        // first. A prompt is a "user" line whose text is not a tool result, a command or a
+        // harness note. An answer is the text of an "assistant" message, its lines joined by
+        // message id.
+        private static List<cHistoryEntry> ClaudeConversation(List<uint> alstPids, bool ablnAnswersOnly) {
+            try {
+                string strDir = ClaudeDir();
+                if (strDir == null) return null;
+                string strSession = ClaudeSession(strDir, alstPids);
+                if (strSession == null) return null;
+                List<string> lstChain = SessionChainNewestFirst(strDir, strSession);
+                lstChain.Reverse();
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = Int32.MaxValue;
+                List<cHistoryEntry> lst = new List<cHistoryEntry>();
+                foreach (string strId in lstChain) {
+                    string strFile = TranscriptFile(strDir, strId);
+                    if (strFile == null) continue;
+                    string strLastMsgId = null;
+                    foreach (string strLine in ReadTailLines(strFile, CNST_TRANSCRIPT_TAIL_BYTES)) {
+                        // Tool output is most of a transcript and is never shown, so it is skipped
+                        // before the costly parse. Neither are lines with no message at all.
+                        if (strLine.IndexOf("\"tool_result\"", StringComparison.Ordinal) >= 0) continue;
+                        if (strLine.IndexOf("\"message\"", StringComparison.Ordinal) < 0) continue;
+                        Dictionary<string, object> row;
+                        try { row = js.DeserializeObject(strLine) as Dictionary<string, object>; } catch (Exception) { continue; }
+                        if (row == null) continue;
+                        if (row.ContainsKey("isSidechain") && true.Equals(row["isSidechain"])) continue;
+                        string strType = Str(row, "type");
+                        Dictionary<string, object> msg = row.ContainsKey("message") ? row["message"] as Dictionary<string, object> : null;
+                        if (msg == null) continue;
+                        if ("assistant".Equals(strType)) {
+                            string strText = TextBlocks(msg, false);
+                            if (strText == null) continue;
+                            string strMsgId = Str(msg, "id");
+                            if (strMsgId != null && strMsgId == strLastMsgId && lst.Count > 0 && lst[lst.Count - 1].IsAnswer)
+                                lst[lst.Count - 1].Text += "\n\n" + strText;
+                            else
+                                lst.Add(new cHistoryEntry(strText, true));
+                            strLastMsgId = strMsgId;
+                        } else if ("user".Equals(strType) && !ablnAnswersOnly) {
+                            if (row.ContainsKey("isMeta") && true.Equals(row["isMeta"])) continue;
+                            if (row.ContainsKey("isCompactSummary") && true.Equals(row["isCompactSummary"])) continue;
+                            string strText = TextBlocks(msg, true);
+                            if (strText == null || IsHarnessText(strText)) continue;
+                            lst.Add(new cHistoryEntry(strText, false));
+                            strLastMsgId = null;
+                        }
+                    }
+                }
+                return lst;
+            } catch (Exception) {
+                return null;
+            }
+        }
+
+        // The text of a message: its content when that is a string, else its text blocks joined.
+        // Null when there is no text, or (ablnRejectToolResults) when it carries a tool result.
+        private static string TextBlocks(Dictionary<string, object> amsg, bool ablnRejectToolResults) {
+            object o;
+            if (!amsg.TryGetValue("content", out o) || o == null) return null;
+            string str = o as string;
+            if (str != null) return str.Trim().Length == 0 ? null : str;
+            object[] blocks = o as object[];
+            if (blocks == null) return null;
+            List<string> lst = new List<string>();
+            foreach (object ob in blocks) {
+                Dictionary<string, object> b = ob as Dictionary<string, object>;
+                if (b == null) continue;
+                string strType = Str(b, "type");
+                if (ablnRejectToolResults && "tool_result".Equals(strType)) return null;
+                if ("text".Equals(strType) && !String.IsNullOrEmpty(Str(b, "text"))) lst.Add(Str(b, "text"));
+            }
+            return lst.Count == 0 ? null : String.Join("\n\n", lst.ToArray());
+        }
+
+        // Lines the harness writes as if from the user: slash commands, their output, notes.
+        private static bool IsHarnessText(string astr) {
+            string s = astr.TrimStart();
+            return s.StartsWith("<command-") || s.StartsWith("<local-command") || s.StartsWith("<system-reminder>")
+                || s.StartsWith("<task-notification>") || s.StartsWith("[Request interrupted")
+                || s.StartsWith("Caveat:");
         }
 
         private static List<string> DerivedFrom(string astrDir, string astrSession) {
@@ -248,9 +352,17 @@ namespace AgentDockStandalone {
 
         // The last CNST_TAIL_BYTES of the file as whole lines. Claude has it open, so share it.
         internal static IEnumerable<string> ReadTailLines(string astrFile) {
+            return ReadTailLines(astrFile, CNST_TAIL_BYTES);
+        }
+
+        // A transcript holds the whole conversation, tool output and all: read up to this much of
+        // its end for Up's conversation and answers lists (Story 6828).
+        private const int CNST_TRANSCRIPT_TAIL_BYTES = 32 * 1024 * 1024;
+
+        internal static IEnumerable<string> ReadTailLines(string astrFile, int aintTailBytes) {
             byte[] buf;
             using (FileStream fs = new FileStream(astrFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) {
-                long lngStart = Math.Max(0, fs.Length - CNST_TAIL_BYTES);
+                long lngStart = Math.Max(0, fs.Length - aintTailBytes);
                 fs.Seek(lngStart, SeekOrigin.Begin);
                 buf = new byte[fs.Length - lngStart];
                 int intRead = 0;

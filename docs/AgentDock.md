@@ -154,6 +154,13 @@ to the end).
   same way (new in 1.0.31, and not yet tried against a live Copilot). With any other agent, they
   are the prompts sent from the box.
   Pick another pane while stepping back, and Up starts again with that pane's own prompts.
+- **What Up steps through** is the small list above Send to: **Up: my prompts** (the default, as
+  above), **Up: conversation** (your prompts and the agent's answers, in order) or **Up: answers**
+  (only the agent's answers). The dock remembers the choice. The status bar says what each step
+  is ("Your prompt" or "Agent's answer") and where you are ("12 of 40"). Up leaves the cursor at
+  the top of the text, so a long answer does not need an Up for every line before the next step.
+  Conversation and answers come from Claude Code's or GitHub Copilot CLI's record of the session.
+- **Copy**, beside Popup Answer, copies what is selected in the box, or all of it when nothing is.
 - **The bar above the box** resizes it: drag it up for a taller box and smaller panes, down for the
   other way. The dock remembers the height.
 - **The bar between the text and Send** sets how much room each gets: drag it left for a wider
