@@ -158,6 +158,11 @@ to the end).
   Works for Claude Code and GitHub Copilot CLI, in the compose box and in every conversation pane.
   In Copilot, after a command and a space the list shows the command's arguments (for `/model `:
   `plan`, `fusion`, `--session` ...), and picking one puts it in the box.
+  Once a command is sent, the conversation above shows the terminal's own screen, under "You sent
+  /skills", since what a command shows (a list, a menu, a settings screen) is never part of the
+  conversation. While the box is empty, the **arrows, Enter, Esc, Tab and Space** go to the
+  terminal, so you pick from that list right there. Start typing in the box, or pick another pane,
+  and the conversation comes back.
 - **Shift+Enter** starts a new line. A prompt with several lines reaches the agent as one prompt.
 - **Up** on the first line brings back earlier prompts, newest first. **Down** goes forward again,
   back to what you were writing. With Claude Code in the pane, these are every prompt that pane's

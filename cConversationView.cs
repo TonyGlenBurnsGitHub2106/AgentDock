@@ -274,14 +274,19 @@ namespace AgentDockStandalone {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             if (mlstBubbles.Count == 0 && mastrScreen != null) {
-                Rectangle rcCap = new Rectangle(12, 10, Math.Max(10, this.ClientSize.Width - 24), this.Font.Height * 2 + 4);
-                TextRenderer.DrawText(g, mstrMessage, this.Font, rcCap, mTheme.Caption,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                int intCapWidth = Math.Max(10, this.ClientSize.Width - 24);
+                TextFormatFlags tff = TextFormatFlags.HorizontalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix;
+                int intCapHeight = TextRenderer.MeasureText(g, mstrMessage, this.Font, new Size(intCapWidth, 0), tff).Height;
+                Rectangle rcCap = new Rectangle(12, 10, intCapWidth, Math.Max(this.Font.Height, intCapHeight) + 4);
+                TextRenderer.DrawText(g, mstrMessage, this.Font, rcCap, mTheme.Caption, tff);
                 int y = rcCap.Bottom + 6;
                 Color clrText = Color.FromArgb(mTheme.Caption.A, mTheme.Caption);
-                foreach (string strLine in mastrScreen) {
-                    if (y > this.ClientSize.Height) break;
-                    TextRenderer.DrawText(g, strLine, mfntScreen, new Point(12, y), clrText, TextFormatFlags.NoPrefix);
+                // A menu or a list a command shows is at the bottom of the screen: when it all
+                // does not fit, the last lines are shown.
+                int intFit = Math.Max(1, (this.ClientSize.Height - y - 4) / mfntScreen.Height);
+                int intFirst = Math.Max(0, mastrScreen.Length - intFit);
+                for (int i = intFirst; i < mastrScreen.Length; i++) {
+                    TextRenderer.DrawText(g, mastrScreen[i], mfntScreen, new Point(12, y), clrText, TextFormatFlags.NoPrefix);
                     y += mfntScreen.Height;
                 }
                 return;

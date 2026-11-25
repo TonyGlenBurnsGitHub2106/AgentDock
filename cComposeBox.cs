@@ -402,6 +402,11 @@ namespace AgentDockStandalone {
         // since a long transcript takes a moment to read.
         private void RefreshLive(bool ablnForce) {
             if (!mblnLive) return;
+            if (mblnCmdScreen) {
+                fAgentAbsorbedTerminal paneCmd = mfncTarget();
+                if (paneCmd != null && !paneCmd.IsDisposed && paneCmd.AbsorbedHwnd == mhwndCmdScreen) { ShowCmdScreen(paneCmd); return; }
+                mblnCmdScreen = false;              // another pane picked: its conversation
+            }
             if (mblnLiveScreen && !ablnForce) ShowPaneScreen(mfncTarget());
             if (mblnLiveLoading) { if (ablnForce) mblnLiveForcePending = true; return; }
             fAgentAbsorbedTerminal pane = mfncTarget();
@@ -458,6 +463,7 @@ namespace AgentDockStandalone {
                         mfrmLivePane  = pane;
                         mstrLiveStamp = strStamp;
                         mlstLiveRaw   = lst;
+                        if (mblnCmdScreen) return;                       // a command's screen is up meanwhile
                         // A new session has nothing to show until its first message (Story 6850,
                         // Tony saw "No conversation found" on every pane he spawned). The pane's
                         // name is left out: right after a spawn it is still the startup command.
@@ -490,6 +496,75 @@ namespace AgentDockStandalone {
                 return;
             }
             vwLive.SetScreen("No conversation yet. The terminal shows this now (a question here is answered in the Keys window):", astrLines);
+        }
+
+        // A slash command sent from the box (Story 6851 follow-up, Tony: "the fact that I entered
+        // this did not display in the output, and though the /skills command ran and put a list in
+        // the terminal, the list did not display in the output either, so I could not make a
+        // selection from it"). An agent keeps no record of a command in the conversation, and what
+        // it shows for one (a list, a menu, a settings screen) is only on its screen. So after a
+        // command is sent, the conversation view shows the terminal's screen, read again on every
+        // tick and after every key, and while the box is empty the arrows, Enter, Esc and Tab go to
+        // the terminal, so a pick is made right there. Typing in the box, or picking another pane,
+        // brings the conversation back.
+        private bool   mblnCmdScreen;
+        private IntPtr mhwndCmdScreen = IntPtr.Zero;
+        private string mstrCmdSent = "";
+        private readonly Timer tmrCmdRead = new Timer();
+
+        private void StartCmdScreen(fAgentAbsorbedTerminal apane, string astrCommand) {
+            if (!mblnLive || apane == null || apane.IsDisposed) return;
+            mblnCmdScreen  = true;
+            mhwndCmdScreen = apane.AbsorbedHwnd;
+            mstrCmdSent    = (astrCommand ?? "").Trim();
+            ShowCmdScreen(apane);
+            // The agent takes a moment to draw what the command shows.
+            ReadCmdScreenSoon(400);
+        }
+
+        private void EndCmdScreen() {
+            if (!mblnCmdScreen) return;
+            mblnCmdScreen = false;
+            tmrCmdRead.Stop();
+            mstrLiveStamp = null;
+            if (mlstLiveRaw != null) vwLive.SetEntries(Shown(mlstLiveRaw), true);
+            RefreshLive(true);
+        }
+
+        private void ReadCmdScreenSoon(int aintMs) {
+            tmrCmdRead.Stop();
+            tmrCmdRead.Interval = aintMs;
+            tmrCmdRead.Start();
+        }
+
+        private void ShowCmdScreen(fAgentAbsorbedTerminal apane) {
+            string[] astrLines = null;
+            try { astrLines = cConsoleInput.ReadScreen(apane.AbsorbedHwnd); } catch (Exception) { }
+            if (astrLines == null) { mblnCmdScreen = false; return; }
+            vwLive.SetScreen("You sent " + mstrCmdSent + ". The terminal shows this now. While the box below is empty, "
+                + "the arrows, Enter, Esc, Tab and Space go to it. Typing in the box brings the conversation back.", astrLines);
+        }
+
+        // Keys for the terminal while a command's screen shows and the box is empty. True when used.
+        private bool CmdScreenKey(KeyEventArgs e) {
+            if (!mblnCmdScreen || txtPrompt.TextLength > 0 || e.Control || e.Alt) return false;
+            switch (e.KeyCode) {
+                case Keys.Up: case Keys.Down: case Keys.Left: case Keys.Right:
+                case Keys.PageUp: case Keys.PageDown: case Keys.Home: case Keys.End:
+                case Keys.Enter: case Keys.Escape: case Keys.Tab: case Keys.Space:
+                    break;
+                default: return false;
+            }
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            if (pane == null || pane.IsDisposed || pane.AbsorbedHwnd != mhwndCmdScreen) { EndCmdScreen(); return false; }
+            string strCode = e.KeyCode == Keys.Space ? " " : cConsoleInput.KeyCode(e.KeyData);
+            if (strCode == null) return false;
+            string strProblem = cConsoleInput.PressKeys(pane.AbsorbedHwnd, strCode);
+            if (strProblem != null) mactStatus("Not sent: " + strProblem);
+            e.SuppressKeyPress = true;
+            e.Handled = true;
+            ReadCmdScreenSoon(150);
+            return true;
         }
 
         // Another pane picked (in Send to, or by clicking in it): Run conversation empties at
@@ -807,6 +882,7 @@ namespace AgentDockStandalone {
             Form frmDock = this.FindForm();
             if (frmDock == null || frmDock.WindowState == FormWindowState.Minimized) return;
             if (!cDockSettings.KeysAutoOpen || fPaneKeys.IsOpenFor(pane)) return;
+            if (mblnCmdScreen && pane.AbsorbedHwnd == mhwndCmdScreen) return;   // the conversation view shows it and takes the keys
             bool blnShowing = fPaneKeys.MenuShowing(cConsoleInput.ReadScreen(pane.AbsorbedHwnd));
             bool blnNew = blnShowing && !mblnMenuSeen;
             mblnMenuSeen = blnShowing;
@@ -945,6 +1021,7 @@ namespace AgentDockStandalone {
 
         private void Prompt_KeyDown(object sender, KeyEventArgs e) {
             if (SlashKey(e)) return;
+            if (CmdScreenKey(e)) return;
             if (e.KeyCode == Keys.Enter && !e.Shift && !e.Control && !e.Alt) {
                 e.SuppressKeyPress = true;
                 Send();
@@ -1001,10 +1078,17 @@ namespace AgentDockStandalone {
             tmrSlashType.Tick += delegate { tmrSlashType.Stop(); MirrorSlash(); };
             tmrSlashRead.Interval = 220;
             tmrSlashRead.Tick += delegate { tmrSlashRead.Stop(); ReadSlash(); };
-            txtPrompt.TextChanged    += delegate { UpdateSlash(); };
+            txtPrompt.TextChanged    += delegate { if (txtPrompt.TextLength > 0) EndCmdScreen(); UpdateSlash(); };
             txtPrompt.PreviewKeyDown += delegate(object s, PreviewKeyDownEventArgs e) {
-                // Tab and Escape reach KeyDown only while the list is open.
-                if (SlashOpen() && (e.KeyCode == Keys.Tab || e.KeyCode == Keys.Escape)) e.IsInputKey = true;
+                // Tab and Escape reach KeyDown only while the list is open, or while a command's
+                // screen takes the keys.
+                if ((SlashOpen() || (mblnCmdScreen && txtPrompt.TextLength == 0))
+                    && (e.KeyCode == Keys.Tab || e.KeyCode == Keys.Escape)) e.IsInputKey = true;
+            };
+            tmrCmdRead.Tick += delegate {
+                tmrCmdRead.Stop();
+                fAgentAbsorbedTerminal pane = mfncTarget();
+                if (mblnCmdScreen && pane != null && !pane.IsDisposed && pane.AbsorbedHwnd == mhwndCmdScreen) ShowCmdScreen(pane);
             };
             txtPrompt.Leave      += delegate { HideSlash(); };
             this.VisibleChanged  += delegate { if (!this.Visible) HideSlash(); };
@@ -1357,6 +1441,10 @@ namespace AgentDockStandalone {
                 mdtSent = DateTime.Now;
                 AddPending(pane, strText);
                 mactStatus("Sent to " + pane.Text + ".");
+                if (strText.TrimStart().StartsWith("/") && mblnLive) {
+                    StartCmdScreen(pane, strText);
+                    mactStatus("Sent " + strText.Trim() + " to " + pane.Text + ". Its screen shows above: the arrows, Enter, Esc and Tab go to it.");
+                }
             };
             t.Start();
         }
