@@ -59,6 +59,9 @@ namespace AgentDockShared {
 
         private LowLevelKeyboardProc mKeyProc;   // strong ref -- Windows holds the pointer
         private IntPtr               mKeyHookId = IntPtr.Zero;
+        private bool                 mblnKeyHookStarted;
+        private IntPtr               mhwndHost;            // the dock's window, read once (the hook runs on its own thread)
+        private uint                 mintHostThread;       // the dock's window thread
 
         public cPaneArranger(Form afrmHost, ToolStripMenuItem amnuWindow, Action<string> aactStatus) {
             mfrmHost   = afrmHost;
@@ -421,13 +424,20 @@ namespace AgentDockShared {
         // -------------------------------------------------------------------
         // Keyboard hook -- the three chords, only while the dock is in front
 
+        // The hook lives on a thread of its own (cHookThread, Story 6848), so a busy dock never
+        // makes typing wait anywhere on the machine.
         public void InstallKeyboardHook() {
-            if (mKeyHookId != IntPtr.Zero) return;
+            if (mblnKeyHookStarted) return;
+            mblnKeyHookStarted = true;
+            mhwndHost      = mfrmHost.Handle;
+            mintHostThread = GetCurrentThreadId();
             mKeyProc = new LowLevelKeyboardProc(KeyHookCallback);
-            using (System.Diagnostics.Process p = System.Diagnostics.Process.GetCurrentProcess())
-            using (System.Diagnostics.ProcessModule m = p.MainModule) {
-                mKeyHookId = SetWindowsHookEx(WH_KEYBOARD_LL, mKeyProc, GetModuleHandle(m.ModuleName), 0);
-            }
+            cHookThread.Start("Agent Dock keyboard hook", delegate {
+                using (System.Diagnostics.Process p = System.Diagnostics.Process.GetCurrentProcess())
+                using (System.Diagnostics.ProcessModule m = p.MainModule) {
+                    mKeyHookId = SetWindowsHookEx(WH_KEYBOARD_LL, mKeyProc, GetModuleHandle(m.ModuleName), 0);
+                }
+            });
         }
 
         public void Dispose() {
@@ -441,13 +451,13 @@ namespace AgentDockShared {
             try {
                 int msg = wParam.ToInt32();
                 if (nCode >= 0 && (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
-                    && !mfrmHost.IsDisposed && GetForegroundWindow() == mfrmHost.Handle
+                    && !mfrmHost.IsDisposed && GetForegroundWindow() == mhwndHost
                     && !Down(VK_MENU)) {
                     KBDLLHOOKSTRUCT k = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT));
                     bool blnCtrl  = Down(VK_CONTROL);
                     bool blnShift = Down(VK_SHIFT);
                     Action act = null;
-                    if (IsEditingKey(k.vkCode) && DockTextBoxHasFocus()) {
+                    if (IsEditingKey(k.vkCode) && DockTextBoxHasFocus(mintHostThread)) {
                         // Typing in the dock's own text box (the compose box): Ctrl+Shift+Arrow
                         // selects a word there, so the dock leaves editing keys alone (Story 6826).
                     } else if (blnCtrl && blnShift) {
@@ -479,12 +489,13 @@ namespace AgentDockShared {
             return aintVk >= VK_PRIOR && aintVk <= VK_DOWN;
         }
 
-        // The hook runs on the dock's own thread, so GetFocus names the dock control that has
-        // the keyboard. A terminal pane is another process and never counts.
-        private static bool DockTextBoxHasFocus() {
-            IntPtr h = GetFocus();
-            if (h == IntPtr.Zero) return false;
-            return Control.FromHandle(h) is TextBoxBase;
+        // The control of the dock's window thread that has the keyboard (GetGUIThreadInfo, since
+        // the hook runs on its own thread). A terminal pane is another process and never counts.
+        private static bool DockTextBoxHasFocus(uint aintThread) {
+            GUITHREADINFO info = new GUITHREADINFO();
+            info.cbSize = Marshal.SizeOf(typeof(GUITHREADINFO));
+            if (!GetGUIThreadInfo(aintThread, ref info) || info.hwndFocus == IntPtr.Zero) return false;
+            return Control.FromHandle(info.hwndFocus) is TextBoxBase;
         }
 
         // -------------------------------------------------------------------
@@ -529,8 +540,25 @@ namespace AgentDockShared {
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct GUITHREADINFO {
+            public int    cbSize;
+            public int    flags;
+            public IntPtr hwndActive;
+            public IntPtr hwndFocus;
+            public IntPtr hwndCapture;
+            public IntPtr hwndMenuOwner;
+            public IntPtr hwndMoveSize;
+            public IntPtr hwndCaret;
+            public int    rcLeft, rcTop, rcRight, rcBottom;
+        }
+
         [DllImport("user32.dll")]
-        private static extern IntPtr GetFocus();
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO lpgui);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
 
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);

@@ -341,7 +341,8 @@ namespace AgentDockStandalone {
 
         private bool        mblnLive;
         private int         mintHeightBeforeLive = -1;    // the height to go back to, when the box grew
-        private bool        mblnLiveLoading;
+        private volatile bool mblnLiveLoading;
+        private bool        mblnLiveForcePending;     // a reread asked for while one was running
         private Form        mfrmLivePane;
         private string      mstrLiveStamp;
         private int         mintLiveTicks;
@@ -399,7 +400,8 @@ namespace AgentDockStandalone {
         // Rereads the conversation when it changed (or the pane did), off the window's thread,
         // since a long transcript takes a moment to read.
         private void RefreshLive(bool ablnForce) {
-            if (!mblnLive || mblnLiveLoading) return;
+            if (!mblnLive) return;
+            if (mblnLiveLoading) { if (ablnForce) mblnLiveForcePending = true; return; }
             fAgentAbsorbedTerminal pane = mfncTarget();
             if (pane == null) {
                 mfrmLivePane = null; mstrLiveStamp = null;
@@ -413,16 +415,31 @@ namespace AgentDockStandalone {
                 mfrmLivePane = pane;
                 return;
             }
-            string strStamp = cAgentHistory.ConversationStamp(lstPids);
             mintLiveTicks++;
-            if (!ablnForce && !blnNewPane) {
-                if (strStamp != null && strStamp == mstrLiveStamp) return;
-                if (strStamp == null && mintLiveTicks % CNST_LIVE_UNSTAMPED_TICKS != 0) return;
-            }
+            bool blnCheckOnly = !ablnForce && !blnNewPane;
+            bool blnUnstampedDue = mintLiveTicks % CNST_LIVE_UNSTAMPED_TICKS == 0;
+            string strStampWas = mstrLiveStamp;
             mblnLiveLoading = true;
             List<uint> lstFor = new List<uint>(lstPids);
             string strPaneName = pane.Text;
+            // Off the window's thread, the change check too (Story 6848: reading Copilot's
+            // record on the window thread made the cursor sluggish across the machine).
             System.Threading.ThreadPool.QueueUserWorkItem(delegate {
+                string strStamp = null;
+                try { strStamp = cAgentHistory.ConversationStamp(lstFor); } catch (Exception) { strStamp = null; }
+                if (blnCheckOnly && ((strStamp != null && strStamp == strStampWas) || (strStamp == null && !blnUnstampedDue))) {
+                    // Nothing changed. A reread asked for meanwhile still happens.
+                    try {
+                        if (this.IsDisposed || !this.IsHandleCreated) { mblnLiveLoading = false; return; }
+                        this.BeginInvoke(new MethodInvoker(delegate {
+                            mblnLiveLoading = false;
+                            if (mblnLiveForcePending || mfncTarget() != pane) { mblnLiveForcePending = false; RefreshLive(true); }
+                        }));
+                    } catch (Exception) {
+                        mblnLiveLoading = false;
+                    }
+                    return;
+                }
                 List<cHistoryEntry> lst = null;
                 try { lst = cAgentHistory.ConversationForPids(lstFor, CNST_CONVERSATION_MAX); } catch (Exception) { lst = null; }
                 try {
@@ -432,7 +449,8 @@ namespace AgentDockStandalone {
                     this.BeginInvoke(new MethodInvoker(delegate {
                         mblnLiveLoading = false;
                         if (!mblnLive) return;                           // turned off meanwhile
-                        if (mfncTarget() != pane) { RefreshLive(true); return; }   // another pane picked: read that one
+                        if (mfncTarget() != pane) { mblnLiveForcePending = false; RefreshLive(true); return; }   // another pane picked: read that one
+                        mblnLiveForcePending = false;
                         mfrmLivePane  = pane;
                         mstrLiveStamp = strStamp;
                         mlstLiveRaw   = lst;
@@ -731,13 +749,33 @@ namespace AgentDockStandalone {
         public event Action<string, int> AgentStateChanged;
         private string mstrLastState;
 
+        // The agent's record is read off the window's thread (Story 6848): a Copilot record could
+        // take a tenth of a second or more, and the window thread must stay free.
+        private volatile bool mblnStateReading;
+
         private void CheckAgentState() {
+            if (mblnStateReading) return;
             fAgentAbsorbedTerminal pane = mfncTarget();
-            int intState = -1;
-            if (pane != null) {
-                List<uint> lstPids = PidsFor(pane.AbsorbedHwnd);
-                if (lstPids != null && lstPids.Count > 0) intState = cAgentHistory.AgentState(lstPids);
-            }
+            List<uint> lstPids = pane == null ? null : PidsFor(pane.AbsorbedHwnd);
+            if (lstPids == null || lstPids.Count == 0) { ShowAgentState(pane, -1); return; }
+            mblnStateReading = true;
+            List<uint> lstFor = new List<uint>(lstPids);
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate {
+                int intRead;
+                try { intRead = cAgentHistory.AgentState(lstFor); } catch (Exception) { intRead = -1; }
+                try {
+                    if (this.IsDisposed || !this.IsHandleCreated) { mblnStateReading = false; return; }
+                    this.BeginInvoke(new MethodInvoker(delegate {
+                        mblnStateReading = false;
+                        if (mfncTarget() == pane) ShowAgentState(pane, intRead);
+                    }));
+                } catch (Exception) {
+                    mblnStateReading = false;
+                }
+            });
+        }
+
+        private void ShowAgentState(fAgentAbsorbedTerminal pane, int intState) {
             string strText = intState < 0 || pane == null ? ""
                 : pane.Text + ": " + (intState == 1 ? "Thinking..." : "Idle");
             string strKey = intState + "|" + strText;

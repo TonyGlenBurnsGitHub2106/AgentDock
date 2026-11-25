@@ -370,13 +370,21 @@ namespace AgentDockStandalone {
         // in another process, which don't propagate WM_MOUSEACTIVATE /
         // WM_PARENTNOTIFY back to us through the SetParent boundary).
 
+        // The hook lives on a thread of its own (cHookThread, Story 6848): Windows holds every
+        // mouse move on the machine until the hook's thread answers, and the dock's window thread
+        // is often busy (Tony: "my cursor becomes very sluggish").
+        private IntPtr mhwndSelf;
+
         private void InstallMouseHook() {
+            mhwndSelf = this.Handle;
             mMouseHookProc = new Win32.LowLevelMouseProc(MouseHookCallback);
-            using (System.Diagnostics.Process p = System.Diagnostics.Process.GetCurrentProcess())
-            using (System.Diagnostics.ProcessModule m = p.MainModule) {
-                mMouseHookId = Win32.SetWindowsHookEx(
-                    Win32.WH_MOUSE_LL, mMouseHookProc, Win32.GetModuleHandle(m.ModuleName), 0);
-            }
+            cHookThread.Start("Agent Dock mouse hook", delegate {
+                using (System.Diagnostics.Process p = System.Diagnostics.Process.GetCurrentProcess())
+                using (System.Diagnostics.ProcessModule m = p.MainModule) {
+                    mMouseHookId = Win32.SetWindowsHookEx(
+                        Win32.WH_MOUSE_LL, mMouseHookProc, Win32.GetModuleHandle(m.ModuleName), 0);
+                }
+            });
         }
 
         private void UninstallMouseHook() {
@@ -458,10 +466,12 @@ namespace AgentDockStandalone {
                     Win32.MSLLHOOKSTRUCT data = (Win32.MSLLHOOKSTRUCT)
                         Marshal.PtrToStructure(lParam, typeof(Win32.MSLLHOOKSTRUCT));
                     IntPtr clicked = Win32.WindowFromPoint(data.pt);
-                    if (clicked != IntPtr.Zero) {
-                        mPanes.NoteClick(clicked);
+                    if (clicked != IntPtr.Zero && !this.IsDisposed) {
+                        // This runs on the hook's own thread: the dock's objects are touched only
+                        // on its window thread.
+                        this.BeginInvoke(new MethodInvoker(delegate { if (mPanes != null) mPanes.NoteClick(clicked); }));
                         IntPtr root = Win32.GetAncestor(clicked, Win32.GA_ROOT);
-                        if (root == this.Handle && Win32.GetForegroundWindow() != this.Handle) {
+                        if (root == mhwndSelf && Win32.GetForegroundWindow() != mhwndSelf) {
                             // Never inside the hook (Story 6826): BringSelfForward attaches to the
                             // terminal's input thread, which can take long enough that Windows
                             // silently removes a slow low-level hook. After that no click was seen,

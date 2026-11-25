@@ -241,21 +241,85 @@ namespace AgentDockStandalone {
             return Directory.Exists(strDir) ? strDir : null;
         }
 
-        // The sessions of process aintPid, oldest first.
-        private static List<string> SessionsOf(string astrDir, string astrStates, uint aintPid) {
-            List<string> lst = new List<string>();
-            string strPid = aintPid.ToString();
-            Regex rxPid = new Regex(@"(^|[^0-9])" + strPid + @"([^0-9]|$)");
+        // Finding a pane's sessions is remembered for a few seconds (Story 6848, Tony: "when I
+        // load conversation at work, my cursor becomes very sluggish"). It used to list every
+        // session folder and every file in each, for every process in the pane, several times a
+        // second for each pane. A Copilot that has been used for months keeps hundreds of session
+        // folders: about 120 ms a check with 400 of them. Now one walk of the folders serves
+        // every pane and process for CNST_SESSION_CACHE_MS, and each process's answer is kept
+        // as long. A new session (a new Copilot, or after /clear) shows up within that time.
+        private const int CNST_SESSION_CACHE_MS = 10000;
+        private static readonly object moCacheLock = new object();
+        private static readonly Dictionary<string, List<string>> mdicPidSessions = new Dictionary<string, List<string>>();
+        private static readonly Dictionary<string, DateTime> mdicPidSessionsAt = new Dictionary<string, DateTime>();
+        private static Dictionary<string, List<string>> mdicMarkers;     // pid digits -> session folders, oldest first
+        private static string   mstrMarkersOf;
+        private static DateTime mdtMarkers = DateTime.MinValue;
+        private static readonly Regex RX_DIGITS = new Regex(@"[0-9]+");
 
-            // 1. A marker file carrying the pid in a session folder.
-            foreach (string strFolder in Directory.GetDirectories(astrStates)) {
-                foreach (string strFile in Directory.GetFiles(strFolder)) {
-                    string strName = Path.GetFileName(strFile);
-                    string strLower = strName.ToLowerInvariant();
-                    bool blnMarker = strLower.Contains("lock") || strLower.Contains("inuse") || strLower.Contains("pid");
-                    if (blnMarker && rxPid.IsMatch(strName)) { lst.Add(Path.GetFileName(strFolder)); break; }
+        // The sessions of process aintPid, oldest first (remembered, see above).
+        private static List<string> SessionsOf(string astrDir, string astrStates, uint aintPid) {
+            string strKey = astrStates + "|" + aintPid;
+            lock (moCacheLock) {
+                List<string> lstHit;
+                DateTime dtAt;
+                if (mdicPidSessions.TryGetValue(strKey, out lstHit) && mdicPidSessionsAt.TryGetValue(strKey, out dtAt)
+                    && (DateTime.UtcNow - dtAt).TotalMilliseconds < CNST_SESSION_CACHE_MS)
+                    return new List<string>(lstHit);
+            }
+            List<string> lst = FindSessionsOf(astrDir, astrStates, aintPid);
+            lock (moCacheLock) {
+                if (mdicPidSessions.Count > 500) { mdicPidSessions.Clear(); mdicPidSessionsAt.Clear(); }
+                mdicPidSessions[strKey]   = new List<string>(lst);
+                mdicPidSessionsAt[strKey] = DateTime.UtcNow;
+            }
+            return lst;
+        }
+
+        // Every session folder with a marker file carrying a pid (inuse.<pid>.lock and the like),
+        // by pid. One walk of the folders, remembered for CNST_SESSION_CACHE_MS.
+        private static Dictionary<string, List<string>> MarkerMap(string astrStates) {
+            lock (moCacheLock) {
+                if (mdicMarkers != null && mstrMarkersOf == astrStates
+                    && (DateTime.UtcNow - mdtMarkers).TotalMilliseconds < CNST_SESSION_CACHE_MS)
+                    return mdicMarkers;
+            }
+            Dictionary<string, List<DirectoryInfo>> dicFound = new Dictionary<string, List<DirectoryInfo>>();
+            foreach (DirectoryInfo diFolder in new DirectoryInfo(astrStates).GetDirectories()) {
+                FileInfo[] afiles;
+                try { afiles = diFolder.GetFiles(); } catch (Exception) { continue; }
+                foreach (FileInfo fi in afiles) {
+                    string strLower = fi.Name.ToLowerInvariant();
+                    if (!(strLower.Contains("lock") || strLower.Contains("inuse") || strLower.Contains("pid"))) continue;
+                    foreach (Match m in RX_DIGITS.Matches(fi.Name)) {
+                        List<DirectoryInfo> lstFor;
+                        if (!dicFound.TryGetValue(m.Value, out lstFor)) { lstFor = new List<DirectoryInfo>(); dicFound[m.Value] = lstFor; }
+                        if (!lstFor.Contains(diFolder)) lstFor.Add(diFolder);
+                    }
                 }
             }
+            Dictionary<string, List<string>> dicMap = new Dictionary<string, List<string>>();
+            foreach (KeyValuePair<string, List<DirectoryInfo>> kv in dicFound) {
+                kv.Value.Sort(delegate(DirectoryInfo a, DirectoryInfo b) { return a.CreationTimeUtc.CompareTo(b.CreationTimeUtc); });
+                List<string> lstNames = new List<string>();
+                foreach (DirectoryInfo di in kv.Value) lstNames.Add(di.Name);
+                dicMap[kv.Key] = lstNames;
+            }
+            lock (moCacheLock) {
+                mdicMarkers   = dicMap;
+                mstrMarkersOf = astrStates;
+                mdtMarkers    = DateTime.UtcNow;
+            }
+            return dicMap;
+        }
+
+        private static List<string> FindSessionsOf(string astrDir, string astrStates, uint aintPid) {
+            List<string> lst = new List<string>();
+            string strPid = aintPid.ToString();
+
+            // 1. A marker file carrying the pid in a session folder.
+            List<string> lstMarked;
+            if (MarkerMap(astrStates).TryGetValue(strPid, out lstMarked)) lst.AddRange(lstMarked);
             if (lst.Count > 0) return lst;
 
             // 2. The process's own log names its sessions.

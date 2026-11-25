@@ -393,4 +393,9 @@ AgentDockStandalone.exe --help           Show these options
 - **The compose box and the Keys window** reach a pane through its console: the dock attaches to
   the console behind the Windows Terminal window, writes key events to its input (prompts, and the
   codes a terminal sends for the arrows, Esc and the like) and reads its screen back.
+- **Mouse and keyboard hooks:** the dock watches clicks and its shortcut keys with Windows
+  low-level hooks. They run on threads of their own, so a busy dock never slows the cursor or
+  typing elsewhere. The agents' records are read off the window's thread too, and GitHub Copilot
+  CLI's session folders are looked through at most once every ten seconds, however many panes
+  there are.
 - **Help:** this file is read from `docs\AgentDock.md` in the Agent Dock folder each time Help is opened.
