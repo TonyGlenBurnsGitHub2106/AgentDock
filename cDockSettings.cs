@@ -159,6 +159,19 @@ namespace AgentDockStandalone {
             Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
         }
 
+        // The dock's own compose box with its Send area folded away (Story 6846, the collapse strip
+        // at its right edge). Conversation panes remember theirs per place (cPaneThemes).
+        public const string KEY_COMPOSE_SEND_HIDDEN = "ComposeSendHidden";
+
+        public static bool ComposeSendHidden {
+            get { return ReadBool(KEY_COMPOSE_SEND_HIDDEN, false); }
+        }
+
+        public static void SaveComposeSendHidden(bool ablnHidden) {
+            mdicValues[KEY_COMPOSE_SEND_HIDDEN] = ablnHidden ? "true" : "false";
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
+        }
+
         // The conversation's font (Story 6846, more theming): a name from cConversationFont.
         public const string KEY_CONVERSATION_FONT = "ConversationFont";
 
@@ -367,7 +380,10 @@ namespace AgentDockStandalone {
                  + KEY_CONVERSATION_FONT + " = " + ConversationFont + "\r\n"
                  + "\r\n"
                  + "# The compose box font, where prompts are written. Picked in Settings -> Palette.\r\n"
-                 + KEY_PROMPT_FONT + " = " + PromptFont + "\r\n";
+                 + KEY_PROMPT_FONT + " = " + PromptFont + "\r\n"
+                 + "\r\n"
+                 + "# true: the compose box's Send area is folded away (the > strip at its right edge).\r\n"
+                 + KEY_COMPOSE_SEND_HIDDEN + " = " + (ComposeSendHidden ? "true" : "false") + "\r\n";
         }
     }
 }

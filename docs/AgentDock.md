@@ -219,6 +219,10 @@ to the end).
   other way. The dock remembers the height.
 - **The bar between the text and Send** sets how much room each gets: drag it left for a wider
   Send to list, right for more text. The dock remembers the width.
+- **The thin strip at the box's right edge** folds the Send area away: click **>** and the text
+  and conversation take the whole width, click **<** to bring it back. Enter still sends while it is
+  folded. The dock remembers it, and each conversation pane remembers its own (its header's Hide
+  Send / Show Send does the same).
 - **Send to**, under **Send**, lists the panes and shows which one the prompt goes to. It follows
   the pane you click in. Pick a different pane in the list to send there instead.
   Each pane is listed by its terminal's title, so renaming a tab in Windows Terminal renames

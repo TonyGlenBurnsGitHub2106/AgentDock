@@ -93,7 +93,7 @@ namespace AgentDockStandalone {
 
             pnlRight.Dock    = DockStyle.Right;
             pnlRight.Width   = cDockSettings.ComposeSendWidth;
-            pnlRight.Padding = new Padding(6, 0, 0, 0);
+            pnlRight.Padding = new Padding(6, 2, 4, 0);
 
             btnSend.Text   = "Send";
             btnSend.Dock   = DockStyle.Fill;
@@ -154,6 +154,7 @@ namespace AgentDockStandalone {
 
             // Send, Popup Answer and Copy share the top row, whatever the width.
             TableLayoutPanel tblButtons = new TableLayoutPanel();
+            mtblButtons = tblButtons;
             tblButtons.Dock        = DockStyle.Top;
             tblButtons.Height      = 30;
             tblButtons.ColumnCount = 3;
@@ -263,6 +264,7 @@ namespace AgentDockStandalone {
             this.Controls.Add(pnlLeft);
             this.Controls.Add(splSend);
             this.Controls.Add(pnlRight);
+            BuildFoldStrip();
 
             tmrLive.Interval = CNST_LIVE_TICK_MS;
             tmrLive.Tick    += delegate { RefreshLive(false); };
@@ -466,7 +468,7 @@ namespace AgentDockStandalone {
             cBubbleStyle      style = cPaneThemes.StyleFor(hwnd);
             cConversationFont font  = cPaneThemes.FontFor(hwnd);
             bool blnHideNotes = cDockSettings.HideWorkingNotes;
-            bool blnHideSend  = IsCard && cPaneThemes.HideSendArea(hwnd);
+            bool blnHideSend  = IsCard ? cPaneThemes.HideSendArea(mfrmPane.AbsorbedHwnd) : cDockSettings.ComposeSendHidden;
             if (blnHideSend != mblnSendHidden) ApplySendArea(blnHideSend);
             if (blnHideNotes != mblnNotesHidden) {
                 mblnNotesHidden = blnHideNotes;
@@ -514,6 +516,39 @@ namespace AgentDockStandalone {
             pnlRight.Visible = !ablnHide;
             splSend.Visible  = !ablnHide;
             btnSendArea.Text = ablnHide ? "Show Send" : "Hide Send";
+            btnFold.Text     = ablnHide ? "<" : ">";
+            mtipButtons.SetToolTip(btnFold, ablnHide ? "Show the Send area" : "Hide the Send area (Enter still sends)");
+        }
+
+        // The collapse strip at the right edge of every compose box (Story 6846, Tony: "I still
+        // don't see a way to minimize the pane on the right"): > folds the Send area away, < brings
+        // it back. Remembered: the dock's own box in agentdock.ini, a conversation pane per place.
+        private readonly Button btnFold = new Button();
+
+        private void BuildFoldStrip() {
+            btnFold.Text      = ">";
+            btnFold.Dock      = DockStyle.Right;
+            btnFold.Width     = 16;
+            btnFold.FlatStyle = FlatStyle.Flat;
+            btnFold.FlatAppearance.BorderSize = 0;
+            btnFold.Font      = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+            btnFold.TextAlign = ContentAlignment.TopCenter;     // at the top, where the eye finds it
+            btnFold.Padding   = new Padding(0, 4, 0, 0);
+            btnFold.Margin    = new Padding(0);
+            btnFold.TabStop   = false;
+            btnFold.Click    += delegate { ToggleSendArea(); };
+            this.Controls.Add(btnFold);              // docked first of the right-hand parts: the far edge
+        }
+
+        private void ToggleSendArea() {
+            bool blnHide = !mblnSendHidden;
+            string strProblem = null;
+            if (IsCard) strProblem = cPaneThemes.SetHideSendArea(mfrmPane.AbsorbedHwnd, blnHide);
+            else { try { cDockSettings.SaveComposeSendHidden(blnHide); } catch (Exception ex) { strProblem = ex.Message; } }
+            ApplySendArea(blnHide);
+            mactStatus((blnHide ? "Send area hidden. Enter still sends. Click < at the right edge to bring it back." : "Send area shown.")
+                + (strProblem == null ? "" : " Not remembered: " + strProblem));
+            txtPrompt.Focus();
         }
 
         // Paints the box in a theme (Story 6845, Settings -> Compose Box Theme). Windows puts
@@ -562,6 +597,10 @@ namespace AgentDockStandalone {
                 c.BackColor = blnSys ? SystemColors.Window : aTheme.InputBack;
                 c.ForeColor = blnSys ? SystemColors.WindowText : aTheme.InputFore;
             }
+            // A strip that stands out from the box, so it reads as a handle.
+            btnFold.BackColor = blnSys ? SystemColors.ControlDark : aTheme.Border;
+            btnFold.ForeColor = blnSys ? Color.White : aTheme.ButtonFore;
+            btnFold.FlatAppearance.MouseOverBackColor = blnSys ? SystemColors.ControlDarkDark : Blend(aTheme.Border, aTheme.ButtonFore, 0.3);
             Color clrBar = blnSys ? SystemColors.ControlDark : aTheme.Border;
             splSend.BackColor   = clrBar;
             splPrompt.BackColor = clrBar;
@@ -953,6 +992,9 @@ namespace AgentDockStandalone {
         public int Number { get { return mintNumber; } set { mintNumber = value; PaintHeader(); } }
         private int mintNumber;
 
+        private TableLayoutPanel mtblButtons;
+        private const int CNST_CARD_SEND_WIDTH = 92;
+
         private void BuildCard() {
             this.Dock    = DockStyle.Fill;
             this.Height  = 200;
@@ -960,10 +1002,35 @@ namespace AgentDockStandalone {
             pnlLabelRow.Visible = false;
             cboTarget.Visible   = false;
             chkFull.Visible     = false;
-            mpnlFull.ColumnStyles[0].Width = 0F;     // Clear Screen gets the whole row
-            mpnlFull.ColumnStyles[1].Width = 100F;
             splSend.SplitterMoved -= SendWidthMoved;
-            pnlRight.Width = Math.Min(pnlRight.Width, 200);
+            // A slim column of small buttons, one above the other (Tony: "with conversation panes,
+            // it takes up too much space"). The > strip at the far right folds even that away.
+            mtblButtons.Visible = false;
+            mpnlFull.Visible    = false;
+            TableLayoutPanel tblCard = new TableLayoutPanel();
+            tblCard.Dock        = DockStyle.Top;
+            tblCard.ColumnCount = 1;
+            tblCard.RowCount    = 4;
+            tblCard.Height      = 4 * 26;
+            tblCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            Button[] aButtons = new Button[] { btnSend, btnAnswer, btnCopy, btnClear };
+            for (int i = 0; i < aButtons.Length; i++) {
+                tblCard.RowStyles.Add(new RowStyle(SizeType.Absolute, 26F));
+                aButtons[i].Parent = null;
+                aButtons[i].Dock   = DockStyle.Fill;
+                aButtons[i].Margin = new Padding(0, 0, 0, 2);
+                aButtons[i].Font   = new Font("Segoe UI", 8.25F);
+                tblCard.Controls.Add(aButtons[i], 0, i);
+            }
+            btnAnswer.Text = "Popup";
+            btnClear.Text  = "Clear";
+            mtipButtons.SetToolTip(btnAnswer, "The latest answer in a window you can edit, copy and resend.");
+            pnlRight.Controls.Add(tblCard);
+            // A gap under the header, so the first button is not pressed against it (Tony: "the
+            // button on the right look slightly cut off at the top").
+            pnlRight.Padding = new Padding(4, 5, 2, 0);
+            pnlRight.Width   = CNST_CARD_SEND_WIDTH;
+            splSend.Width    = 3;
 
             pnlHeader.Dock    = DockStyle.Top;
             pnlHeader.Height  = 26;
@@ -1003,14 +1070,7 @@ namespace AgentDockStandalone {
             // Hide Send / Show Send (Tony: "remembered options to hide the pane to the right for
             // each terminal"). Enter still sends with the Send area hidden.
             HeaderButton(btnSendArea, "Hide Send", 74, "Hide or show the Send area at the right of this pane. Enter still sends. Remembered for this pane's place.");
-            btnSendArea.Click += delegate {
-                bool blnHide = !mblnSendHidden;
-                string strProblem = cPaneThemes.SetHideSendArea(mfrmPane.AbsorbedHwnd, blnHide);
-                ApplySendArea(blnHide);
-                mactStatus((blnHide ? "Send area hidden. Enter still sends." : "Send area shown.")
-                    + (strProblem == null ? "" : " Not remembered: " + strProblem));
-                txtPrompt.Focus();
-            };
+            btnSendArea.Click += delegate { ToggleSendArea(); };
 
             pnlHeader.Controls.Add(lblHeader);
             pnlHeader.Controls.Add(btnTheme);
