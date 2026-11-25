@@ -60,6 +60,35 @@ namespace AgentDockStandalone {
             return cCopilotHistory.Stamp(alstPids) != null;
         }
 
+        // Claude Code's folder (CLAUDE_CONFIG_DIR, or .claude in the profile), or null.
+        public static string ClaudeConfigDir() { return ClaudeDir(); }
+
+        // The folder the Claude running as one of these processes was started in (its session
+        // file's "cwd"), or null. The slash command list reads that folder's own skills (Story 6851).
+        private static readonly Regex RX_CWD = new Regex("\"cwd\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+
+        public static string ClaudeCwd(List<uint> alstPids) {
+            try {
+                string strDir = ClaudeDir();
+                if (strDir == null) return null;
+                foreach (uint intPid in alstPids) {
+                    string strFile = Path.Combine(Path.Combine(strDir, "sessions"), intPid + ".json");
+                    if (!File.Exists(strFile)) continue;
+                    Match m = RX_CWD.Match(ReadShared(strFile));
+                    if (m.Success) return Regex.Unescape(m.Groups[1].Value);
+                }
+            } catch (Exception) { }
+            return null;
+        }
+
+        // Whether one of these processes is a Claude Code session (not Copilot).
+        public static bool IsClaude(List<uint> alstPids) {
+            try {
+                string strDir = ClaudeDir();
+                return strDir != null && ClaudeSession(strDir, alstPids) != null;
+            } catch (Exception) { return false; }
+        }
+
         // The session id of the Claude running as one of these processes, or null.
         private static string ClaudeSession(string astrDir, List<uint> alstPids) {
             foreach (uint intPid in alstPids) {

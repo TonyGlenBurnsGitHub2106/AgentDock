@@ -244,6 +244,7 @@ namespace AgentDockStandalone {
             txtPrompt.Dock          = DockStyle.Fill;
             txtPrompt.Font          = new Font("Consolas", 10F);
             txtPrompt.KeyDown      += new KeyEventHandler(Prompt_KeyDown);
+            WireSlash();
 
             // The bar between the text and the Send area: drag it left for a wider Send to list,
             // right for more text. The width is remembered (ComposeSendWidth, Story 6828).
@@ -923,6 +924,7 @@ namespace AgentDockStandalone {
         }
 
         private void Prompt_KeyDown(object sender, KeyEventArgs e) {
+            if (SlashKey(e)) return;
             if (e.KeyCode == Keys.Enter && !e.Shift && !e.Control && !e.Alt) {
                 e.SuppressKeyPress = true;
                 Send();
@@ -944,6 +946,153 @@ namespace AgentDockStandalone {
                    == txtPrompt.GetLineFromCharIndex(txtPrompt.TextLength)) {
                 if (StepHistory(+1)) e.SuppressKeyPress = true;
             }
+        }
+
+        // ------------------------------------------------------------ slash commands (Story 6851)
+        // A "/" at the very start of the box opens a pick list of the target pane's commands
+        // (cSlashCommands), narrowed as you type the name. Up / Down move in it, Tab or Enter put
+        // the picked one in the box followed by a space, so whatever it needs can be typed after
+        // it, and the status line says what it does and what it takes. Enter on a name already
+        // typed in full sends as usual. Escape closes the list. Only while the caret is in the
+        // command's name: after the space the box is ordinary text again.
+        private fSlashList mfrmSlash;
+        private IntPtr mhwndSlashPane = IntPtr.Zero;
+        private bool   mblnSlashCopilot;
+        private string mstrSlashCwd;
+        private bool   mblnSlashSuppressed;    // Escape closed it: stays shut until the name changes
+        private string mstrSlashClosedFor;
+
+        private void WireSlash() {
+            txtPrompt.TextChanged   += delegate { UpdateSlash(); };
+            txtPrompt.KeyUp         += delegate(object s, KeyEventArgs e) {
+                if (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right || e.KeyCode == Keys.Home || e.KeyCode == Keys.End) UpdateSlash();
+            };
+            txtPrompt.MouseUp       += delegate { UpdateSlash(); };
+            txtPrompt.PreviewKeyDown += delegate(object s, PreviewKeyDownEventArgs e) {
+                // Tab and Escape reach KeyDown only while the list is open.
+                if (SlashOpen() && (e.KeyCode == Keys.Tab || e.KeyCode == Keys.Escape)) e.IsInputKey = true;
+            };
+            txtPrompt.Leave         += delegate { HideSlash(); };
+            this.VisibleChanged     += delegate { if (!this.Visible) HideSlash(); };
+            this.Disposed           += delegate { if (mfrmSlash != null && !mfrmSlash.IsDisposed) mfrmSlash.Dispose(); };
+        }
+
+        private bool SlashOpen() { return mfrmSlash != null && !mfrmSlash.IsDisposed && mfrmSlash.Visible; }
+
+        private void HideSlash() { if (SlashOpen()) mfrmSlash.Hide(); }
+
+        // The name typed after the slash and where it ends, when the caret is in it. False when
+        // the box does not start with a slash or the caret is past the name.
+        private bool SlashToken(out string astrTyped, out int aintEnd) {
+            astrTyped = null; aintEnd = 0;
+            string s = txtPrompt.Text;
+            if (s.Length == 0 || s[0] != '/') return false;
+            int intEnd = 1;
+            while (intEnd < s.Length && !Char.IsWhiteSpace(s[intEnd])) intEnd++;
+            if (txtPrompt.SelectionStart > intEnd || txtPrompt.SelectionStart == 0) return false;
+            astrTyped = s.Substring(1, intEnd - 1);
+            aintEnd = intEnd;
+            return true;
+        }
+
+        private void UpdateSlash() {
+            string strTyped; int intEnd;
+            if (txtPrompt.ReadOnly || !SlashToken(out strTyped, out intEnd)) { HideSlash(); mblnSlashSuppressed = false; return; }
+            if (mblnSlashSuppressed && strTyped == mstrSlashClosedFor) return;
+            mblnSlashSuppressed = false;
+            List<cSlashCommand> lst = cSlashCommands.Matching(SlashCommandsForTarget(), strTyped);
+            if (lst.Count == 0) { HideSlash(); return; }
+            if (mfrmSlash == null || mfrmSlash.IsDisposed) {
+                mfrmSlash = new fSlashList();
+                mfrmSlash.Picked += delegate(cSlashCommand c) { PickSlash(c); txtPrompt.Focus(); };
+                Form frmHost = this.FindForm();
+                if (frmHost != null) {
+                    frmHost.Deactivate += delegate { HideSlash(); };
+                    frmHost.Move       += delegate { HideSlash(); };
+                    frmHost.Resize     += delegate { HideSlash(); };
+                }
+            }
+            Rectangle rc = txtPrompt.RectangleToScreen(txtPrompt.ClientRectangle);
+            mfrmSlash.ShowFor(lst, rc, txtPrompt.BackColor, txtPrompt.ForeColor, this.FindForm());
+        }
+
+        // The commands of the pane the box sends to. Which agent it runs and its folder are
+        // looked up once per pane.
+        private List<cSlashCommand> SlashCommandsForTarget() {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            IntPtr hwnd = pane == null ? IntPtr.Zero : pane.AbsorbedHwnd;
+            if (hwnd != mhwndSlashPane) {
+                mhwndSlashPane   = hwnd;
+                mblnSlashCopilot = false;
+                mstrSlashCwd     = null;
+                if (hwnd != IntPtr.Zero) {
+                    try {
+                        List<uint> lstPids = cConsoleInput.ConsoleProcesses(hwnd);
+                        mblnSlashCopilot = !cAgentHistory.IsClaude(lstPids) && cAgentHistory.HasSession(lstPids);
+                        mstrSlashCwd     = cAgentHistory.ClaudeCwd(lstPids);
+                    } catch (Exception) { }
+                    if (mstrSlashCwd == null) mhwndSlashPane = IntPtr.Zero;   // agent still starting: look again next time
+                }
+            }
+            return cSlashCommands.For(mblnSlashCopilot, mstrSlashCwd);
+        }
+
+        // Puts "/name " in place of the name typed so far, caret after the space.
+        private void PickSlash(cSlashCommand ac) {
+            string strTyped; int intEnd;
+            if (ac == null || !SlashToken(out strTyped, out intEnd)) { HideSlash(); return; }
+            string s = txtPrompt.Text;
+            string strRest = s.Substring(intEnd);
+            if (strRest.Length == 0 || !Char.IsWhiteSpace(strRest[0])) strRest = " " + strRest;
+            txtPrompt.Text = "/" + ac.Name + strRest;
+            txtPrompt.SelectionStart = ac.Name.Length + 2;
+            txtPrompt.SelectionLength = 0;
+            HideSlash();
+            mactStatus("/" + ac.Name + (ac.ArgumentHint.Length > 0 ? " " + ac.ArgumentHint : "")
+                + (ac.Description.Length > 0 ? ": " + Shorten(ac.Description, 160) : "")
+                + ". Type anything it needs after it, then Enter.");
+        }
+
+        private static string Shorten(string s, int aintMax) {
+            return s.Length <= aintMax ? s : s.Substring(0, aintMax - 3).TrimEnd() + "...";
+        }
+
+        // Keys for the open list. True when the key was used.
+        private bool SlashKey(KeyEventArgs e) {
+            if (!SlashOpen() || e.Control || e.Alt) return false;
+            switch (e.KeyCode) {
+                case Keys.Up:       mfrmSlash.Step(-1); break;
+                case Keys.Down:     mfrmSlash.Step(+1); break;
+                case Keys.PageUp:   mfrmSlash.Step(-9); break;
+                case Keys.PageDown: mfrmSlash.Step(+9); break;
+                case Keys.Escape: {
+                    string strTyped; int intEnd;
+                    SlashToken(out strTyped, out intEnd);
+                    mblnSlashSuppressed = true;
+                    mstrSlashClosedFor  = strTyped;
+                    HideSlash();
+                    break;
+                }
+                case Keys.Tab:
+                    PickSlash(mfrmSlash.Selected);
+                    break;
+                case Keys.Enter: {
+                    if (e.Shift) return false;
+                    string strTyped; int intEnd;
+                    cSlashCommand c = mfrmSlash.Selected;
+                    // The name is already typed in full: send it, like any Enter.
+                    if (c == null || (SlashToken(out strTyped, out intEnd) && String.Equals(strTyped, c.Name, StringComparison.OrdinalIgnoreCase))) {
+                        HideSlash();
+                        return false;
+                    }
+                    PickSlash(c);
+                    break;
+                }
+                default: return false;
+            }
+            e.SuppressKeyPress = true;
+            e.Handled = true;
+            return true;
         }
 
         // Moves through earlier prompts. Leaving the newest end puts the unsent draft back.

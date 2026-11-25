@@ -146,6 +146,14 @@ to the end).
 
 - **Enter** (or **Send**) types the prompt into the agent of the pane you last clicked and sends
   it. The box empties and is ready for the next one.
+- **Slash commands:** type **/** as the first thing in the box and a list of that pane's commands
+  opens above it, each with what it does: the agent's own (/clear, /model, /compact ...), your
+  skills, the skills of the folder the agent runs in, and your custom commands. Keep typing to
+  narrow it. **Up / Down** pick, **Tab** or **Enter** puts the command in the box with a space after
+  it, ready for anything it needs, and the bar at the bottom says what it does. A click on a row does
+  the same. **Escape** closes the list. A command already typed in full is sent by Enter as usual. In
+  a Copilot pane the list holds Copilot's commands. Works in the compose box and in every
+  conversation pane.
 - **Shift+Enter** starts a new line. A prompt with several lines reaches the agent as one prompt.
 - **Up** on the first line brings back earlier prompts, newest first. **Down** goes forward again,
   back to what you were writing. With Claude Code in the pane, these are every prompt that pane's
