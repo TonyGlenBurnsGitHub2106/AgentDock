@@ -80,6 +80,8 @@ namespace AgentDockStandalone {
                 delegate(string s) { this.tslStatus.Text = s; });
             mCompose.Height = cDockSettings.ComposeBoxHeight;
             this.Controls.Add(mCompose);
+            // Run conversation grows the box (Story 6845): the panes make room.
+            mCompose.SizeChanged += delegate { if (mPanes != null && mCompose.Visible) mPanes.ReTile(); };
 
             // The bar between the panes and the compose box: drag it up for a taller box and
             // smaller panes, down for the other way. The height is remembered (ComposeBoxHeight).
@@ -825,6 +827,7 @@ namespace AgentDockStandalone {
             mnuShowCompose.Checked = cDockSettings.ShowComposeBox;
             mnuShowCompose.Click += delegate { ToggleComposeBox(); };
             mnuSettings.DropDownItems.Add(mnuShowCompose);
+            mnuSettings.DropDownItems.Add(BuildThemeMenu());
             mnuSettings.DropDownItems.Add(new ToolStripSeparator());
             mnuSettings.DropDownItems.Add(mnuEdit);
             mnuSettings.DropDownItems.Add(mnuFolder);
@@ -834,6 +837,32 @@ namespace AgentDockStandalone {
         }
 
         private ToolStripMenuItem mnuShowCompose;
+
+        // Settings -> Compose Box Theme (Story 6845): every theme, the current one ticked.
+        // Picking one paints the box at once and is remembered (agentdock.ini ComposeTheme).
+        private ToolStripMenuItem BuildThemeMenu() {
+            ToolStripMenuItem mnuTheme = new ToolStripMenuItem("Compose Box &Theme");
+            mnuTheme.ToolTipText = "The colors of the compose box and its conversation bubbles. Remembered.";
+            foreach (cComposeTheme t in cComposeTheme.All) {
+                cComposeTheme theme = t;
+                ToolStripMenuItem mi = new ToolStripMenuItem(theme.Name);
+                mi.Checked = theme.Name == cDockSettings.ComposeTheme;
+                mi.Click += delegate {
+                    string strProblem = null;
+                    try { cDockSettings.SaveComposeTheme(theme.Name); } catch (Exception ex) { strProblem = ex.Message; }
+                    foreach (ToolStripItem o in mnuTheme.DropDownItems) {
+                        ToolStripMenuItem m = o as ToolStripMenuItem;
+                        if (m != null) m.Checked = m == mi;
+                    }
+                    mCompose.ApplyTheme(theme);
+                    this.tslStatus.Text = "Compose box theme: " + theme.Name + "."
+                        + (strProblem == null ? "" : " Not remembered: " + strProblem)
+                        + (mCompose.Visible ? "" : " Turn on Show Compose Box to see it.");
+                };
+                mnuTheme.DropDownItems.Add(mi);
+            }
+            return mnuTheme;
+        }
 
         // Settings -> Show Compose Box: flips the setting, saves it and shows or hides the box at once.
         private void ToggleComposeBox() {

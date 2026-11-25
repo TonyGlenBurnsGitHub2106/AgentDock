@@ -16,8 +16,12 @@ namespace AgentDockStandalone {
         private readonly Label   lblStatus = new Label();
         private bool mblnEdited;
 
-        public fAnswerPopup(string astrTitle, string astrAnswer) {
-            this.Text          = "Answer - " + astrTitle;
+        public fAnswerPopup(string astrTitle, string astrAnswer) : this("Answer", astrTitle, astrAnswer) { }
+
+        // astrKind heads the window: "Answer", or "Your prompt" for a prompt opened from Run
+        // conversation (Story 6845).
+        public fAnswerPopup(string astrKind, string astrTitle, string astrAnswer) {
+            this.Text          = astrKind + " - " + astrTitle;
             this.StartPosition = FormStartPosition.CenterParent;
             this.Size          = new Size(900, 650);
             this.MinimumSize   = new Size(420, 260);

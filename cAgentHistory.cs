@@ -183,6 +183,33 @@ namespace AgentDockStandalone {
             return lst;
         }
 
+        // The same for processes already found (Story 6845, Run conversation): safe off the
+        // window's thread, since it does not touch the console the way finding the processes does.
+        public static List<cHistoryEntry> ConversationForPids(List<uint> alstPids, int aintMax) {
+            List<cHistoryEntry> lst = ClaudeConversation(alstPids, false);
+            if (lst == null) lst = cCopilotHistory.ConversationForPids(alstPids, false);
+            if (lst != null && lst.Count > aintMax) lst.RemoveRange(0, lst.Count - aintMax);
+            return lst;
+        }
+
+        // A cheap sign of whether the conversation changed (Story 6845): the current Claude
+        // session's transcript, its size and when it was written. Null when no Claude session is
+        // found (Copilot, or no agent), and Run conversation then rereads every few seconds.
+        public static string ConversationStamp(List<uint> alstPids) {
+            try {
+                string strDir = ClaudeDir();
+                if (strDir == null) return null;
+                string strSession = ClaudeSession(strDir, alstPids);
+                if (strSession == null) return null;
+                string strFile = TranscriptFile(strDir, strSession);
+                if (strFile == null) return strSession;
+                FileInfo fi = new FileInfo(strFile);
+                return strSession + "|" + fi.Length + "|" + fi.LastWriteTimeUtc.Ticks;
+            } catch (Exception) {
+                return null;
+            }
+        }
+
         // Claude Code: the transcripts of the session and the ones before it (a /clear), oldest
         // first. A prompt is a "user" line whose text is not a tool result, a command or a
         // harness note. An answer is the text of an "assistant" message, its lines joined by

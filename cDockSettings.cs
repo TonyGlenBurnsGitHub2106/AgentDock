@@ -47,6 +47,10 @@ namespace AgentDockStandalone {
         // default), Conversation (prompts and answers) or Answers. Chosen in the box itself.
         public const string KEY_COMPOSE_UP_MODE = "ComposeUpMode";
 
+        // The compose box's look (Story 6845): a theme name from cComposeTheme, picked in
+        // Settings -> Compose Box Theme. Windows (the plain system look) by default.
+        public const string KEY_COMPOSE_THEME = "ComposeTheme";
+
         private static readonly Dictionary<string, string> mdicValues =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static string mstrConfigFolder;
@@ -95,9 +99,24 @@ namespace AgentDockStandalone {
                 if (mdicValues.TryGetValue(KEY_COMPOSE_UP_MODE, out strValue)) {
                     if (String.Equals(strValue, "Conversation", StringComparison.OrdinalIgnoreCase)) return eUpMode.Conversation;
                     if (String.Equals(strValue, "Answers", StringComparison.OrdinalIgnoreCase)) return eUpMode.Answers;
+                    if (String.Equals(strValue, "Live", StringComparison.OrdinalIgnoreCase)) return eUpMode.Live;
                 }
                 return eUpMode.Prompts;
             }
+        }
+
+        public static string ComposeTheme {
+            get {
+                string strValue;
+                if (mdicValues.TryGetValue(KEY_COMPOSE_THEME, out strValue) && strValue.Length > 0)
+                    return cComposeTheme.Named(strValue).Name;
+                return cComposeTheme.CNST_DEFAULT;
+            }
+        }
+
+        public static void SaveComposeTheme(string astrName) {
+            mdicValues[KEY_COMPOSE_THEME] = cComposeTheme.Named(astrName).Name;
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
         }
 
         public static void SaveComposeUpMode(eUpMode aeMode) {
@@ -240,8 +259,12 @@ namespace AgentDockStandalone {
                  + KEY_COMPOSE_SEND_WIDTH + " = " + ComposeSendWidth + "\r\n"
                  + "\r\n"
                  + "# What Up steps through in the compose box: Prompts (yours, the default), Conversation\r\n"
-                 + "#   (your prompts and the agent's answers) or Answers. Chosen in the compose box.\r\n"
-                 + KEY_COMPOSE_UP_MODE + " = " + ComposeUpMode + "\r\n";
+                 + "#   (your prompts and the agent's answers), Answers, or Live (Run conversation:\r\n"
+                 + "#   the conversation as bubbles above the text). Chosen in the compose box.\r\n"
+                 + KEY_COMPOSE_UP_MODE + " = " + ComposeUpMode + "\r\n"
+                 + "\r\n"
+                 + "# The compose box's look. Picked in the dock with Settings -> Compose Box Theme.\r\n"
+                 + KEY_COMPOSE_THEME + " = " + ComposeTheme + "\r\n";
         }
     }
 }

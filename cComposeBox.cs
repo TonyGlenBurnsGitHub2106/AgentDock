@@ -29,6 +29,19 @@ namespace AgentDockStandalone {
         private readonly ComboBox cboTarget = new ComboBox();
         private readonly Timer   tmrTarget = new Timer();
 
+        // Run conversation (Story 6845): the conversation as bubbles above the text box, kept
+        // current by tmrLive. The text box then sits under it, with a bar between to resize.
+        private readonly Panel             pnlLeft   = new Panel();
+        private readonly cConversationView vwLive    = new cConversationView();
+        private readonly Splitter          splPrompt = new Splitter();
+        private readonly Splitter          splSend   = new Splitter();
+        private readonly Panel             pnlRight  = new Panel();
+        private readonly Panel             pnlLabelRow = new Panel();
+        private readonly Timer             tmrLive   = new Timer();
+        private const int CNST_LIVE_PROMPT_HEIGHT = 70;
+        private const int CNST_LIVE_MIN_HEIGHT    = 320;   // the box grows to this for Run conversation
+        private cComposeTheme mTheme = cComposeTheme.Named(cComposeTheme.CNST_DEFAULT);
+
         private readonly Func<fAgentAbsorbedTerminal> mfncTarget;
         private readonly Func<List<Form>>             mfncPanes;
         private readonly Action<Form>                 mactSetTarget;
@@ -57,7 +70,6 @@ namespace AgentDockStandalone {
             this.Padding = new Padding(4);
             this.Visible = false;
 
-            Panel pnlRight = new Panel();
             pnlRight.Dock    = DockStyle.Right;
             pnlRight.Width   = cDockSettings.ComposeSendWidth;
             pnlRight.Padding = new Padding(6, 0, 0, 0);
@@ -107,18 +119,20 @@ namespace AgentDockStandalone {
             cboUpMode.Dock          = DockStyle.Right;
             cboUpMode.Width         = 130;
             cboUpMode.DropDownWidth = 170;
-            cboUpMode.Items.AddRange(new object[] { "Up: my prompts", "Up: conversation", "Up: answers" });
+            cboUpMode.Items.AddRange(new object[] { "Up: my prompts", "Up: conversation", "Up: answers", "Run conversation" });
             cboUpMode.SelectedIndex = (int)cDockSettings.ComposeUpMode;
             cboUpMode.SelectedIndexChanged += delegate {
                 eUpMode eMode = (eUpMode)Math.Max(0, cboUpMode.SelectedIndex);
                 try { cDockSettings.SaveComposeUpMode(eMode); } catch { /* not remembered, no harm */ }
                 // Stepping starts over in the new list. What you were writing comes back.
                 if (mintHistoryAt >= 0) { mintHistoryAt = -1; SetPrompt(mstrDraft); }
-                mactStatus("Up now steps through " + UpModeWords(eMode) + ".");
+                ApplyLive();
+                mactStatus(eMode == eUpMode.Live
+                    ? "Run conversation: the conversation shows above the text and stays current. Click a bubble to read all of it. Up steps through your prompts."
+                    : "Up now steps through " + UpModeWords(eMode) + ".");
             };
             cboUpMode.DropDownClosed += delegate { txtPrompt.Focus(); };
 
-            Panel pnlLabelRow = new Panel();
             pnlLabelRow.Dock    = DockStyle.Top;
             pnlLabelRow.Height  = 28;
             pnlLabelRow.Padding = new Padding(0, 2, 0, 4);
@@ -155,7 +169,6 @@ namespace AgentDockStandalone {
 
             // The bar between the text and the Send area: drag it left for a wider Send to list,
             // right for more text. The width is remembered (ComposeSendWidth, Story 6828).
-            Splitter splSend = new Splitter();
             splSend.Dock      = DockStyle.Right;
             splSend.Width     = 6;
             splSend.MinSize   = cDockSettings.CNST_COMPOSE_SEND_MIN_WIDTH;
@@ -166,10 +179,31 @@ namespace AgentDockStandalone {
                 try { cDockSettings.SaveComposeSendWidth(pnlRight.Width); } catch { /* not remembered, no harm */ }
             };
 
+            // The left side: the text alone, or (Run conversation) the conversation over the
+            // text with a bar between them. Docked from the back: the text, its bar, the view.
+            vwLive.Dock    = DockStyle.Fill;
+            vwLive.Visible = false;
+            vwLive.BubbleClicked += new Action<cHistoryEntry>(OpenBubble);
+            splPrompt.Dock      = DockStyle.Bottom;
+            splPrompt.Height    = 5;
+            splPrompt.MinSize   = 34;
+            splPrompt.MinExtra  = 60;
+            splPrompt.BackColor = SystemColors.ControlDark;
+            splPrompt.Cursor    = Cursors.HSplit;
+            splPrompt.Visible   = false;
+            pnlLeft.Dock = DockStyle.Fill;
+            pnlLeft.Controls.Add(vwLive);
+            pnlLeft.Controls.Add(splPrompt);
+            pnlLeft.Controls.Add(txtPrompt);
+
             // Docked from the back of the z-order: the Send area, then its bar, then the text fills.
-            this.Controls.Add(txtPrompt);
+            this.Controls.Add(pnlLeft);
             this.Controls.Add(splSend);
             this.Controls.Add(pnlRight);
+
+            tmrLive.Interval = CNST_LIVE_TICK_MS;
+            tmrLive.Tick    += delegate { RefreshLive(false); };
+            ApplyTheme(cComposeTheme.Named(cDockSettings.ComposeTheme));
 
             tmrTarget.Interval = 400;
             tmrTarget.Tick    += delegate {
@@ -184,6 +218,171 @@ namespace AgentDockStandalone {
             this.Visible = ablnShow;
             if (ablnShow) { ShowTarget(); tmrTarget.Start(); }
             else tmrTarget.Stop();
+            ApplyLive();
+        }
+
+        // ------------------------------------------------------------ Run conversation
+
+        private const int CNST_LIVE_TICK_MS      = 1500;
+        private const int CNST_LIVE_UNSTAMPED_TICKS = 4;    // no change sign (Copilot): reread this often
+        private const int CNST_PIDS_KEEP_MS      = 15000;   // how long a pane's processes are trusted
+
+        private bool        mblnLive;
+        private int         mintHeightBeforeLive = -1;    // the height to go back to, when the box grew
+        private bool        mblnLiveLoading;
+        private Form        mfrmLivePane;
+        private string      mstrLiveStamp;
+        private int         mintLiveTicks;
+        private IntPtr      mhwndPids = IntPtr.Zero;
+        private List<uint>  mlstPids;
+        private DateTime    mdtPids = DateTime.MinValue;
+
+        // Shows or hides the conversation to match the list and whether the box is shown.
+        private void ApplyLive() {
+            bool blnLive = this.Visible && UpMode() == eUpMode.Live;
+            if (blnLive == mblnLive) return;
+            mblnLive = blnLive;
+            pnlLeft.SuspendLayout();
+            if (blnLive) {
+                txtPrompt.Dock   = DockStyle.Bottom;
+                txtPrompt.Height = CNST_LIVE_PROMPT_HEIGHT;
+                splPrompt.Visible = true;
+                vwLive.Visible    = true;
+            } else {
+                vwLive.Visible    = false;
+                splPrompt.Visible = false;
+                txtPrompt.Dock    = DockStyle.Fill;
+            }
+            pnlLeft.ResumeLayout(true);
+            if (blnLive) {
+                // A conversation needs room: a short box grows, and goes back when this is turned off.
+                if (this.Height < CNST_LIVE_MIN_HEIGHT) {
+                    mintHeightBeforeLive = this.Height;
+                    this.Height = CNST_LIVE_MIN_HEIGHT;
+                }
+                mfrmLivePane  = null;
+                mstrLiveStamp = null;
+                vwLive.SetMessage("Reading the conversation...");
+                RefreshLive(true);
+                tmrLive.Start();
+            } else {
+                tmrLive.Stop();
+                if (mintHeightBeforeLive > 0) { this.Height = mintHeightBeforeLive; mintHeightBeforeLive = -1; }
+            }
+        }
+
+        // The pane's processes, found again every few seconds (finding them borrows its console,
+        // so it is done here, on the window's thread, and not too often).
+        private List<uint> PidsFor(IntPtr ahwnd) {
+            if (ahwnd == mhwndPids && mlstPids != null && (DateTime.Now - mdtPids).TotalMilliseconds < CNST_PIDS_KEEP_MS)
+                return mlstPids;
+            List<uint> lst;
+            try { lst = cConsoleInput.ConsoleProcesses(ahwnd); } catch (Exception) { lst = null; }
+            mhwndPids = ahwnd; mlstPids = lst; mdtPids = DateTime.Now;
+            return lst;
+        }
+
+        // Rereads the conversation when it changed (or the pane did), off the window's thread,
+        // since a long transcript takes a moment to read.
+        private void RefreshLive(bool ablnForce) {
+            if (!mblnLive || mblnLiveLoading) return;
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            if (pane == null) {
+                mfrmLivePane = null; mstrLiveStamp = null;
+                vwLive.SetMessage("Pick a pane in Send to (or click inside one) to see its conversation.");
+                return;
+            }
+            bool blnNewPane = pane != mfrmLivePane;
+            List<uint> lstPids = PidsFor(pane.AbsorbedHwnd);
+            if (lstPids == null || lstPids.Count == 0) {
+                vwLive.SetMessage("No agent was found in " + pane.Text + ".");
+                mfrmLivePane = pane;
+                return;
+            }
+            string strStamp = cAgentHistory.ConversationStamp(lstPids);
+            mintLiveTicks++;
+            if (!ablnForce && !blnNewPane) {
+                if (strStamp != null && strStamp == mstrLiveStamp) return;
+                if (strStamp == null && mintLiveTicks % CNST_LIVE_UNSTAMPED_TICKS != 0) return;
+            }
+            mblnLiveLoading = true;
+            List<uint> lstFor = new List<uint>(lstPids);
+            string strPaneName = pane.Text;
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate {
+                List<cHistoryEntry> lst = null;
+                try { lst = cAgentHistory.ConversationForPids(lstFor, CNST_CONVERSATION_MAX); } catch (Exception) { lst = null; }
+                try {
+                    if (this.IsDisposed || !this.IsHandleCreated) return;
+                    this.BeginInvoke(new MethodInvoker(delegate {
+                        mblnLiveLoading = false;
+                        if (!mblnLive || mfncTarget() != pane) return;   // turned off, or another pane picked meanwhile
+                        mfrmLivePane  = pane;
+                        mstrLiveStamp = strStamp;
+                        if (lst == null) vwLive.SetMessage("No conversation found for " + strPaneName
+                            + ". The dock reads Claude Code and GitHub Copilot CLI.");
+                        else vwLive.SetEntries(lst, blnNewPane);
+                    }));
+                } catch (Exception) {
+                    mblnLiveLoading = false;
+                }
+            });
+        }
+
+        // A bubble clicked: its whole text in the answer popup.
+        private void OpenBubble(cHistoryEntry aEntry) {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            string strPane = pane == null ? "Agent Dock" : pane.Text;
+            using (fAnswerPopup dlg = new fAnswerPopup(aEntry.IsAnswer ? "Answer" : "Your prompt", strPane, aEntry.Text)) {
+                dlg.ShowDialog(this.FindForm());
+            }
+            txtPrompt.Focus();
+        }
+
+        // ------------------------------------------------------------ themes
+
+        // Paints the box in a theme (Story 6845, Settings -> Compose Box Theme). Windows puts
+        // every control back in its system colors.
+        public void ApplyTheme(cComposeTheme aTheme) {
+            mTheme = aTheme;
+            bool blnSys = aTheme.IsSystem;
+            this.BackColor        = blnSys ? SystemColors.Control : aTheme.Back;
+            pnlLeft.BackColor     = this.BackColor;
+            pnlRight.BackColor    = this.BackColor;
+            pnlLabelRow.BackColor = this.BackColor;
+            txtPrompt.BackColor   = blnSys ? SystemColors.Window : aTheme.InputBack;
+            txtPrompt.ForeColor   = blnSys ? SystemColors.WindowText : aTheme.InputFore;
+            txtPrompt.BorderStyle = blnSys ? BorderStyle.Fixed3D : BorderStyle.FixedSingle;
+            lblTarget.ForeColor   = blnSys ? SystemColors.GrayText : aTheme.Caption;
+            foreach (Button b in new Button[] { btnSend, btnAnswer, btnCopy }) {
+                if (blnSys) {
+                    b.FlatStyle = FlatStyle.Standard;
+                    b.BackColor = SystemColors.Control;
+                    b.ForeColor = SystemColors.ControlText;
+                    b.UseVisualStyleBackColor = true;
+                } else {
+                    b.FlatStyle = FlatStyle.Flat;
+                    b.FlatAppearance.BorderColor = aTheme.Border;
+                    b.FlatAppearance.MouseOverBackColor = Blend(aTheme.ButtonBack, aTheme.ButtonFore, 0.15);
+                    b.FlatAppearance.MouseDownBackColor = Blend(aTheme.ButtonBack, aTheme.ButtonFore, 0.30);
+                    b.BackColor = aTheme.ButtonBack;
+                    b.ForeColor = aTheme.ButtonFore;
+                }
+            }
+            foreach (ComboBox c in new ComboBox[] { cboUpMode, cboTarget }) {
+                c.FlatStyle = blnSys ? FlatStyle.Standard : FlatStyle.Flat;
+                c.BackColor = blnSys ? SystemColors.Window : aTheme.InputBack;
+                c.ForeColor = blnSys ? SystemColors.WindowText : aTheme.InputFore;
+            }
+            Color clrBar = blnSys ? SystemColors.ControlDark : aTheme.Border;
+            splSend.BackColor   = clrBar;
+            splPrompt.BackColor = clrBar;
+            vwLive.ApplyTheme(aTheme);
+            cComposeTheme.ThemeScrollBars(txtPrompt, aTheme);
+            this.Invalidate(true);
+        }
+
+        private static Color Blend(Color a, Color b, double adblB) {
+            return Color.FromArgb((int)(a.R + (b.R - a.R) * adblB), (int)(a.G + (b.G - a.G) * adblB), (int)(a.B + (b.B - a.B) * adblB));
         }
 
         public void FocusPrompt() {
@@ -337,6 +536,7 @@ namespace AgentDockStandalone {
         private static string UpModeWords(eUpMode aeMode) {
             if (aeMode == eUpMode.Conversation) return "the whole conversation";
             if (aeMode == eUpMode.Answers) return "the agent's answers";
+            if (aeMode == eUpMode.Live) return "your prompts (the conversation shows above)";
             return "your prompts";
         }
 
@@ -344,7 +544,8 @@ namespace AgentDockStandalone {
             fAgentAbsorbedTerminal pane = mfncTarget();
             eUpMode eMode = UpMode();
             List<cHistoryEntry> lst = new List<cHistoryEntry>();
-            if (eMode == eUpMode.Prompts) {
+            // Run conversation shows the whole conversation already, so Up there brings back prompts.
+            if (eMode == eUpMode.Prompts || eMode == eUpMode.Live) {
                 List<string> lstAgent = pane == null ? null : cAgentHistory.ForPane(pane.AbsorbedHwnd, CNST_HISTORY_MAX);
                 if (lstAgent == null || lstAgent.Count == 0) lstAgent = new List<string>(mlstHistory);
                 foreach (string s in lstAgent) lst.Add(new cHistoryEntry(s, false));
@@ -464,7 +665,7 @@ namespace AgentDockStandalone {
         }
 
         protected override void Dispose(bool ablnDisposing) {
-            if (ablnDisposing) tmrTarget.Dispose();
+            if (ablnDisposing) { tmrTarget.Dispose(); tmrLive.Dispose(); }
             base.Dispose(ablnDisposing);
         }
     }

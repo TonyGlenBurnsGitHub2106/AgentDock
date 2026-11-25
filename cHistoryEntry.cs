@@ -9,5 +9,7 @@ namespace AgentDockStandalone {
     }
 
     // What Up steps through, chosen in the compose box and remembered (ComposeUpMode).
-    internal enum eUpMode { Prompts = 0, Conversation = 1, Answers = 2 }
+    // Live (Story 6845, "Run conversation"): the conversation shows as bubbles above the text box
+    // and stays current, and Up steps through your prompts.
+    internal enum eUpMode { Prompts = 0, Conversation = 1, Answers = 2, Live = 3 }
 }

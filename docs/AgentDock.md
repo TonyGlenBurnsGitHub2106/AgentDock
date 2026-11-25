@@ -160,6 +160,20 @@ to the end).
   is ("Your prompt" or "Agent's answer") and where you are ("12 of 40"). Up leaves the cursor at
   the top of the text, so a long answer does not need an Up for every line before the next step.
   Conversation and answers come from Claude Code's or GitHub Copilot CLI's record of the session.
+- **Run conversation**, the last choice in that list, shows the conversation of the pane in Send
+  to above the text, as chat bubbles, newest at the bottom. Your prompts sit at the right in
+  rounder bubbles, the agent's answers at the left in squarer ones, each kind in its own color and
+  outlined. Only what was said shows: no thinking and no tool calls. It stays current while the
+  agent works (it looks every second or two), and stays at the bottom unless you have scrolled up
+  to read. A long message is cut short in its bubble; **click any bubble** to open the whole of it
+  in the answer window (select, edit, Copy). Drag the bar between the conversation and the text to
+  give either more room. The box grows to make room when Run conversation is picked, and goes back
+  to its height when you pick another choice. While it is on, Up steps through your prompts.
+- **Settings -> Compose Box Theme** colors the compose box: Windows (the plain look, the default),
+  Daylight, Dark, Midnight, Nord, Dracula, Solarized Light, Solarized Dark, Forest, Ocean, Sepia,
+  Rose, Lavender, Slate, Amber Terminal, Green Terminal, Sunset and High Contrast. Each theme sets
+  the box, the text, the buttons and lists, and the two kinds of bubble. It changes at once and the
+  dock remembers it.
 - **Copy**, beside Popup Answer, copies what is selected in the box, or all of it when nothing is.
 - **The bar above the box** resizes it: drag it up for a taller box and smaller panes, down for the
   other way. The dock remembers the height.
