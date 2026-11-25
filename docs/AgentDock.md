@@ -163,7 +163,9 @@ to the end).
 - **Run conversation**, the last choice in that list, shows the conversation of the pane in Send
   to above the text, as chat bubbles. It reads from the bottom up: it opens at the newest message,
   at the bottom, with older ones above it, and follows each new message as it arrives. Scroll up
-  to read older ones and it stays where you are; scroll back to the bottom and it follows again. Your prompts sit at the right in
+  to read older ones and it stays where you are; scroll back to the bottom and it follows again.
+  Pick another pane in Send to (or click inside one) and the conversation empties at once, then
+  shows that pane's conversation, opening at its newest message. What you have typed stays. Your prompts sit at the right in
   rounder bubbles, the agent's answers at the left in squarer ones, each kind in its own color and
   outlined. Only what was said shows: no thinking and no tool calls. It stays current while the
   agent works (it looks every second or two), and stays at the bottom unless you have scrolled up

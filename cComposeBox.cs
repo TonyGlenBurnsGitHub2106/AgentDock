@@ -169,7 +169,7 @@ namespace AgentDockStandalone {
             cboTarget.SelectedIndexChanged += delegate {
                 if (mblnSyncing) return;
                 TargetItem item = cboTarget.SelectedItem as TargetItem;
-                if (item != null) mactSetTarget(item.Pane);
+                if (item != null) { mactSetTarget(item.Pane); FollowTarget(); }
             };
             cboTarget.DropDownClosed += delegate { txtPrompt.Focus(); };
             // Each pane is shown in its own tab's color (Story 6828).
@@ -232,6 +232,7 @@ namespace AgentDockStandalone {
             tmrTarget.Interval = 400;
             tmrTarget.Tick    += delegate {
                 ShowTarget();
+                FollowTarget();
                 if (++mintTicks % CNST_SAMPLE_EVERY_TICKS == 0) SampleTabColors();
             };
             cboTarget.DropDown += delegate { SampleTabColors(); };
@@ -300,8 +301,9 @@ namespace AgentDockStandalone {
                     mintHeightBeforeLive = this.Height;
                     this.Height = CNST_LIVE_MIN_HEIGHT;
                 }
-                mfrmLivePane  = null;
-                mstrLiveStamp = null;
+                mfrmLivePane    = null;
+                mfrmLiveShowing = null;
+                mstrLiveStamp   = null;
                 vwLive.SetMessage("Reading the conversation...");
                 RefreshLive(true);
                 tmrLive.Start();
@@ -355,7 +357,8 @@ namespace AgentDockStandalone {
                     if (this.IsDisposed || !this.IsHandleCreated) return;
                     this.BeginInvoke(new MethodInvoker(delegate {
                         mblnLiveLoading = false;
-                        if (!mblnLive || mfncTarget() != pane) return;   // turned off, or another pane picked meanwhile
+                        if (!mblnLive) return;                           // turned off meanwhile
+                        if (mfncTarget() != pane) { RefreshLive(true); return; }   // another pane picked: read that one
                         mfrmLivePane  = pane;
                         mstrLiveStamp = strStamp;
                         if (lst == null) vwLive.SetMessage("No conversation found for " + strPaneName
@@ -367,6 +370,20 @@ namespace AgentDockStandalone {
                 }
             });
         }
+
+        // Another pane picked (in Send to, or by clicking in it): Run conversation empties at
+        // once and reads that pane's conversation, opening at its newest message (Tony,
+        // 2026-11-25: "clear the compose window when we select a new terminal").
+        private void FollowTarget() {
+            if (!mblnLive) return;
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            if (pane == null || pane == mfrmLivePane || pane == mfrmLiveShowing) return;
+            mfrmLiveShowing = pane;
+            vwLive.SetMessage("Reading the conversation of " + pane.Text + "...");
+            RefreshLive(true);
+        }
+
+        private Form mfrmLiveShowing;   // the pane the view was last emptied for
 
         // A bubble clicked: its whole text in the answer popup.
         private void OpenBubble(cHistoryEntry aEntry) {
