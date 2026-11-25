@@ -263,7 +263,7 @@ administrator can only be reached while the dock itself runs as administrator.
 **Settings -> Conversation Panes** hides every terminal and shows each one as its conversation
 instead: one conversation pane per terminal, in the dock's pane order. Each has its own text box,
 Send, Popup Answer, Copy, Clear Screen and Keys, and sends only to its own terminal. Its header shows the
-pane's number and name on its tab's color and **Thinking...** or **Idle**, and has three buttons:
+pane's number and name on its tab's color and **Thinking...** or **Idle**, and has these buttons:
 
 - **Theme**: that pane's own colors, bubbles and fonts, Use Global, and the Palette (a right-click
   on the header opens the same menu).
@@ -272,6 +272,9 @@ pane's number and name on its tab's color and **Thinking...** or **Idle**, and h
 - **Hide Options / Show Options**: hides the column of options at the right of that pane (Send,
   Popup, Copy, Clear) for more room, and shows it again. Enter still sends. Remembered for that
   pane's place. The **>** strip at the pane's right edge does the same.
+  A new pane starts with the options hidden.
+- **Close**: closes the pane and its terminal together, after asking. The agent session in it ends.
+  Use Agents -> Unparent Active Pane instead to keep the terminal running on the desktop.
 
 **The Window menu lays them out** as it does the terminals: Tile Vertical, Tile Horizontal,
 Cascade, Quadrant Layout, and Maximize / Restore Pane (the pane you last wrote in fills the dock).

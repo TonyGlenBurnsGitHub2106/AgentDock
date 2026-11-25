@@ -32,8 +32,8 @@ namespace AgentDockStandalone {
             public string Style;
             public string Font;
             public string PromptFont;   // the compose box's font
-            public bool   HideSend;
-            public bool IsEmpty { get { return Theme == null && Style == null && Font == null && PromptFont == null && !HideSend; } }
+            public int    HideSend = -1;    // 1 hidden, 0 shown, -1 never chosen: hidden (Story 6850)
+            public bool IsEmpty { get { return Theme == null && Style == null && Font == null && PromptFont == null && HideSend < 0; } }
         }
 
         private static Dictionary<int, Override> mdicPlaces;
@@ -70,7 +70,8 @@ namespace AgentDockStandalone {
                         o.Theme = Known(parts[1], cComposeTheme.Exists) ? cComposeTheme.Named(parts[1].Trim()).Name : null;
                         o.Style = Known(parts[2], cBubbleStyle.Exists) ? cBubbleStyle.Named(parts[2].Trim()).Name : null;
                         o.Font  = Known(parts[3], cConversationFont.Exists) ? cConversationFont.Named(parts[3].Trim()).Name : null;
-                        o.HideSend = parts.Length > 4 && parts[4].Trim() == "1";
+                        string strHide = parts.Length > 4 ? parts[4].Trim() : "";
+                        o.HideSend = strHide == "1" ? 1 : (strHide == "0" ? 0 : -1);
                         o.PromptFont = parts.Length > 5 && Known(parts[5], cConversationFont.Exists) ? cConversationFont.Named(parts[5].Trim()).Name : null;
                         if (!o.IsEmpty) mdicPlaces[intPlace] = o;
                     }
@@ -128,10 +129,11 @@ namespace AgentDockStandalone {
             return Change(ahwnd, delegate(Override o) { o.PromptFont = astrFont == null ? null : cConversationFont.Named(astrFont).Name; });
         }
 
-        // Whether the pane's conversation pane hides its Send area (remembered per place).
+        // Whether the pane's conversation pane hides its Send area (remembered per place). A place
+        // never set hides it (Story 6850, Tony: "It should spawn with hide options on, not off").
         public static bool HideSendArea(IntPtr ahwnd) {
             Override o = Find(ahwnd);
-            return o != null && o.HideSend;
+            return o == null || o.HideSend != 0;
         }
 
         // Each setter saves, repaints everything and returns null, or why it could not be saved.
@@ -163,7 +165,7 @@ namespace AgentDockStandalone {
         }
 
         public static string SetHideSendArea(IntPtr ahwnd, bool ablnHide) {
-            return Change(ahwnd, delegate(Override o) { o.HideSend = ablnHide; });
+            return Change(ahwnd, delegate(Override o) { o.HideSend = ablnHide ? 1 : 0; });
         }
 
         private static string Change(IntPtr ahwnd, Action<Override> aactChange) {
@@ -192,7 +194,7 @@ namespace AgentDockStandalone {
                       .Append('\t').Append(o.Theme ?? CNST_FOLLOW)
                       .Append('\t').Append(o.Style ?? CNST_FOLLOW)
                       .Append('\t').Append(o.Font ?? CNST_FOLLOW)
-                      .Append('\t').Append(o.HideSend ? "1" : "0")
+                      .Append('\t').Append(o.HideSend == 1 ? "1" : (o.HideSend == 0 ? "0" : CNST_FOLLOW))
                       .Append('\t').Append(o.PromptFont ?? CNST_FOLLOW)
                       .Append("\r\n");
                 }

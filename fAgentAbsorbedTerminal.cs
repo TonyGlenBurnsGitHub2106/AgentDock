@@ -89,6 +89,19 @@ namespace AgentDockStandalone {
 
         protected override void OnShown(EventArgs e) {
             base.OnShown(e);
+            EnsureAbsorbed();
+        }
+
+        // Takes the terminal in, once. Called at Shown, and by the dock's ShowPane right after
+        // Show, because a pane shown while the pane area is hidden (conversation panes on) gets
+        // no Shown until the area is visible again (Story 6850, Tony: "Spawn additional pane ...
+        // loads a new form, but the pane is not absorbed into it"). ShowPane makes the area
+        // visible for this call: a window made while it is hidden is destroyed at once.
+        private bool mblnAbsorbDone;
+
+        public void EnsureAbsorbed() {
+            if (mblnAbsorbDone || this.IsDisposed) return;
+            mblnAbsorbDone = true;
             try {
                 AbsorbHwnd();
                 AppendUndockMenuItem();
@@ -97,6 +110,16 @@ namespace AgentDockStandalone {
                     "Could not absorb terminal window:\r\n\r\n" + ex.Message,
                     "Agent Dock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
+        }
+
+        // Closes the pane and its terminal with it, whoever started the terminal (Story 6850,
+        // Tony: "There should be an easy way to close a pane and the terminal that goes with it").
+        // A pane the dock took in from outside otherwise gives its terminal back to the desktop.
+        private bool mblnEndTerminal;
+
+        public void CloseWithTerminal() {
+            mblnEndTerminal = true;
+            this.Close();
         }
 
         private void AppendUndockMenuItem() {
@@ -206,7 +229,11 @@ namespace AgentDockStandalone {
 
         private void Watchdog_Tick(object sender, EventArgs e) {
             if (this.IsDisposed) return;
-            if (mhwndAbsorbed != IntPtr.Zero && Win32.IsWindow(mhwndAbsorbed)) { FollowTitle(); return; }
+            if (mhwndAbsorbed != IntPtr.Zero && Win32.IsWindow(mhwndAbsorbed)) {
+                if (!mblnRestored && Win32.GetAncestor(mhwndAbsorbed, Win32.GA_ROOT) == mhwndAbsorbed) { Escaped(); return; }
+                FollowTitle();
+                return;
+            }
             mhwndAbsorbed = IntPtr.Zero;
             mblnRestored  = true;
             if (mtmrWatchdog != null) {
@@ -214,6 +241,33 @@ namespace AgentDockStandalone {
                 mtmrWatchdog.Dispose();
                 mtmrWatchdog = null;
             }
+            try { this.Close(); } catch { /* form already closing */ }
+        }
+
+        // The terminal is alive but no longer inside this pane: its window is on the desktop again
+        // (Story 6850: the pane's own window had been destroyed under it). Take it back in once;
+        // if it is out again, close this pane and leave the terminal on the desktop, running,
+        // rather than keep an empty pane that cannot be reached.
+        private bool mblnRetried;
+
+        private void Escaped() {
+            if (!mblnRetried && !this.IsDisposed) {
+                mblnRetried = true;
+                Win32.SetParent(mhwndAbsorbed, this.Handle);
+                if (Win32.GetAncestor(mhwndAbsorbed, Win32.GA_ROOT) != mhwndAbsorbed) {
+                    PlaceAbsorbed(0);
+                    Win32.ShowWindow(mhwndAbsorbed, Win32.SW_SHOWNORMAL);
+                    ScheduleLayoutNudge();
+                    return;
+                }
+            }
+            if (mtmrWatchdog != null) {
+                mtmrWatchdog.Stop();
+                mtmrWatchdog.Dispose();
+                mtmrWatchdog = null;
+            }
+            SuppressTerminateOnClose = true;    // it is out on its own: never close a live session
+            UnparentAndRestore();
             try { this.Close(); } catch { /* form already closing */ }
         }
 
@@ -286,7 +340,7 @@ namespace AgentDockStandalone {
                 mtmrWatchdog = null;
             }
             UnparentAndRestore();
-            if (mblnOwnedSpawn
+            if ((mblnOwnedSpawn || mblnEndTerminal)
                 && !SuppressTerminateOnClose
                 && mhwndAbsorbed != IntPtr.Zero
                 && Win32.IsWindow(mhwndAbsorbed)) {

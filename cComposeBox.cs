@@ -1238,6 +1238,11 @@ namespace AgentDockStandalone {
             // each terminal"). Enter still sends with the Send area hidden.
             HeaderButton(btnSendArea, "Hide Options", 86, "Hide or show the options at the right of this pane (Send, Popup, Copy, Clear). Enter still sends. Remembered for this pane's place.");
             btnSendArea.Click += delegate { ToggleSendArea(); };
+            // Close (Story 6850, Tony: "There should be an easy way to close a pane and the
+            // terminal that goes with it, from the conversation mode"): the pane and its terminal
+            // both go, the agent session ends. Asks first, naming the pane.
+            HeaderButton(btnCloseCard, "Close", 0, "Close this pane and its terminal. The agent session in it ends.");
+            btnCloseCard.Click += delegate { CloseCard(); };
 
             pnlHeader.Resize += delegate { FitHeader(); };
             pnlHeader.Controls.Add(lblHeader);
@@ -1245,6 +1250,7 @@ namespace AgentDockStandalone {
             pnlHeader.Controls.Add(btnGlobal);
             pnlHeader.Controls.Add(btnSendArea);
             pnlHeader.Controls.Add(lblState);
+            pnlHeader.Controls.Add(btnCloseCard);   // outermost: at the far right, always shown
             this.Controls.Add(pnlHeader);           // docked last of all: across the top
 
             // Writing in a conversation pane makes its pane the dock's current one, so the Agents
@@ -1256,6 +1262,20 @@ namespace AgentDockStandalone {
 
         private readonly Button btnGlobal   = new Button();
         private readonly Button btnSendArea = new Button();
+        private readonly Button btnCloseCard = new Button();
+
+        private void CloseCard() {
+            if (mfrmPane == null || mfrmPane.IsDisposed) return;
+            string strName = (mintNumber > 0 ? mintNumber + ". " : "") + mfrmPane.Text;
+            DialogResult dr = MessageBox.Show(this.FindForm(),
+                "Close pane: " + strName + "?\r\n\r\n"
+                + "Its terminal closes too, and the agent session in it ends. This cannot be undone.",
+                "Agent Dock", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (dr != DialogResult.Yes) return;
+            string strText = mfrmPane.Text;
+            mfrmPane.CloseWithTerminal();
+            mactStatus("Closed " + strText + " and its terminal.");
+        }
 
         // A flat header button as wide as its longest text needs (aintWidth is ignored, kept so the
         // calls read as before). "Hide Options" is measured with "Show Options", its other face.
@@ -1280,7 +1300,7 @@ namespace AgentDockStandalone {
         private void FitHeader() {
             if (!IsCard) return;
             int intRoom = pnlHeader.ClientSize.Width - pnlHeader.Padding.Horizontal - CNST_TITLE_MIN
-                        - (lblState.Visible ? lblState.Width : 0);
+                        - (lblState.Visible ? lblState.Width : 0) - btnCloseCard.Width;
             Button[] aByNeed = new Button[] { btnTheme, btnGlobal, btnSendArea };   // most needed first
             foreach (Button b in aByNeed) {
                 bool blnWanted = b != btnGlobal || mblnGlobalWanted;
@@ -1298,7 +1318,7 @@ namespace AgentDockStandalone {
             Color clrText = dblLight > 150 ? Color.Black : Color.White;
             pnlHeader.BackColor = clrBack;
             lblHeader.ForeColor = clrText;
-            foreach (Button b in new Button[] { btnTheme, btnGlobal, btnSendArea }) {
+            foreach (Button b in new Button[] { btnTheme, btnGlobal, btnSendArea, btnCloseCard }) {
                 b.BackColor = clrBack;
                 b.ForeColor = clrText;
                 b.FlatAppearance.MouseOverBackColor = Blend(clrBack, clrText, 0.2);

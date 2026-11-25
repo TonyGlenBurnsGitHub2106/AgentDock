@@ -670,9 +670,7 @@ namespace AgentDockStandalone {
                     // A normal pane that fell back to an elevated launch is admin -- say so.
                     cPaneColors.Remember(hNew, strTabHex);   // the Send to list shows it (Story 6828)
                     fAgentAbsorbedTerminal frm = new fAgentAbsorbedTerminal(hNew, true, ablnAdmin || !blnRightLevel);
-                    frm.MdiParent   = this;
-                    frm.FormClosed += new FormClosedEventHandler(ChildPane_FormClosed);
-                    frm.Show();
+                    ShowPane(frm);
                     ReTileIfMultiple();
                     UpdateStatus();
                     return;
@@ -758,14 +756,44 @@ namespace AgentDockStandalone {
                     if (cTabColor.ColorExistingWindow(h, out strTabHex)) cPaneColors.Remember(h, strTabHex);
                 }
                 fAgentAbsorbedTerminal frm = new fAgentAbsorbedTerminal(h);
-                frm.MdiParent   = this;
-                frm.FormClosed += new FormClosedEventHandler(ChildPane_FormClosed);
-                frm.Show();
+                ShowPane(frm);
                 intCount++;
                 if (intCount >= amaxCount) break;
             }
             return intCount;
         }
+
+        // Puts a new pane in the dock and takes its terminal in (Story 6850). With conversation
+        // panes on, or the compose box full screen, the area that holds the panes is hidden, and
+        // WinForms destroys a pane's window the moment it is made there (measured 2026-11-25: made
+        // and destroyed four times in one call). The terminal went into a window that no longer
+        // existed, Windows put it back on the desktop, and the dock kept an empty pane with no
+        // conversation card to close it from (Tony: "it absorbs a pane with nothing in it and I
+        // cannot then close the pane"). So the area is shown for the moment it takes, with drawing
+        // held off so nothing flickers. A pane already in survives the area being hidden again.
+        private void ShowPane(fAgentAbsorbedTerminal afrm) {
+            MdiClient mdi = null;
+            foreach (Control c in this.Controls) { if (c is MdiClient) mdi = (MdiClient)c; }
+            bool blnHidden = mdi != null && !mdi.Visible;
+            if (blnHidden) {
+                Win32.SendMessage(this.Handle, CNST_WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero);
+                mdi.Visible = true;
+            }
+            try {
+                afrm.MdiParent   = this;
+                afrm.FormClosed += new FormClosedEventHandler(ChildPane_FormClosed);
+                afrm.Show();
+                afrm.EnsureAbsorbed();
+            } finally {
+                if (blnHidden) {
+                    mdi.Visible = false;
+                    Win32.SendMessage(this.Handle, CNST_WM_SETREDRAW, new IntPtr(1), IntPtr.Zero);
+                    this.Refresh();
+                }
+            }
+        }
+
+        private const uint CNST_WM_SETREDRAW = 0x000B;
 
         private HashSet<IntPtr> SnapshotAbsorbedHwnds() {
             HashSet<IntPtr> set = new HashSet<IntPtr>();
