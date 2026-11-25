@@ -19,6 +19,8 @@ namespace AgentDockStandalone {
         private readonly ListBox lstBubbles = new ListBox();
         private readonly ListBox lstFonts = new ListBox();
         private readonly ListBox lstPromptFonts = new ListBox();
+        private readonly ComboBox cboFontSize = new ComboBox();
+        private readonly ComboBox cboPromptSize = new ComboBox();
         private readonly CheckBox chkHideNotes = new CheckBox();
         private readonly Label   lblDescription = new Label();
         private readonly Panel   pnlPreview = new Panel();
@@ -64,13 +66,14 @@ namespace AgentDockStandalone {
             tblLists.Dock = DockStyle.Left;
             tblLists.Width = 600;
             tblLists.ColumnCount = 4;
-            tblLists.RowCount = 2;
+            tblLists.RowCount = 3;
             tblLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 31F));
             tblLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 23F));
             tblLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 23F));
             tblLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 23F));
             tblLists.RowStyles.Add(new RowStyle(SizeType.Absolute, 22F));
             tblLists.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            tblLists.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tblLists.Padding = new Padding(8, 8, 4, 4);
             string[] astrHeads = new string[] { "Colors", "Bubbles", "Font", "Prompt Font" };
             ListBox[] alst = new ListBox[] { lstColors, lstBubbles, lstFonts, lstPromptFonts };
@@ -85,6 +88,24 @@ namespace AgentDockStandalone {
                 alst[i].SelectedIndexChanged += delegate { if (!mblnLoading) ShowPreview(); };
                 tblLists.Controls.Add(alst[i], i, 1);
             }
+            // A size under each font list (Tony: "pick font and font size, not just font").
+            // Picking a font puts its own size here; then any size can be chosen.
+            ComboBox[] acbo = new ComboBox[] { cboFontSize, cboPromptSize };
+            for (int i = 0; i < 2; i++) {
+                ComboBox cbo = acbo[i];
+                cbo.DropDownStyle = ComboBoxStyle.DropDownList;
+                cbo.Dock = DockStyle.Fill;
+                foreach (float f in cConversationFont.Sizes) cbo.Items.Add(cConversationFont.SizeText(f) + " pt");
+                cbo.SelectedIndexChanged += delegate { if (!mblnLoading) ShowPreview(); };
+                tblLists.Controls.Add(cbo, i + 2, 2);
+            }
+            Label lblSize = new Label();
+            lblSize.Text = "Size";
+            lblSize.AutoSize = true;
+            lblSize.Anchor = AnchorStyles.Right;
+            tblLists.Controls.Add(lblSize, 1, 2);
+            lstFonts.SelectedIndexChanged += delegate { if (!mblnLoading) { SyncSize(cboFontSize, cConversationFont.Named(lstFonts.SelectedItem as string)); ShowPreview(); } };
+            lstPromptFonts.SelectedIndexChanged += delegate { if (!mblnLoading) { SyncSize(cboPromptSize, cConversationFont.Named(lstPromptFonts.SelectedItem as string)); ShowPreview(); } };
             // Each color theme drawn in its own colors, so the list itself is a palette.
             lstColors.DrawMode   = DrawMode.OwnerDrawFixed;
             lstColors.ItemHeight = 24;
@@ -176,8 +197,24 @@ namespace AgentDockStandalone {
 
         private cComposeTheme Theme() { return cComposeTheme.Named(lstColors.SelectedItem as string); }
         private cBubbleStyle  Style() { return cBubbleStyle.Named(lstBubbles.SelectedItem as string); }
-        private cConversationFont FontPick() { return cConversationFont.Named(lstFonts.SelectedItem as string); }
-        private cConversationFont PromptFontPick() { return cConversationFont.Named(lstPromptFonts.SelectedItem as string); }
+        private cConversationFont FontPick() { return cConversationFont.Named(lstFonts.SelectedItem as string).WithSize(SizeOf(cboFontSize)); }
+        private cConversationFont PromptFontPick() { return cConversationFont.Named(lstPromptFonts.SelectedItem as string).WithSize(SizeOf(cboPromptSize)); }
+
+        private static float SizeOf(ComboBox acbo) {
+            int i = acbo.SelectedIndex;
+            return i >= 0 && i < cConversationFont.Sizes.Length ? cConversationFont.Sizes[i] : 0F;
+        }
+
+        // Shows afont's size in the size list (the nearest one offered), without a preview of its own.
+        private void SyncSize(ComboBox acbo, cConversationFont afont) {
+            bool blnWas = mblnLoading;
+            mblnLoading = true;
+            int intBest = 0;
+            for (int i = 0; i < cConversationFont.Sizes.Length; i++)
+                if (Math.Abs(cConversationFont.Sizes[i] - afont.Size) < Math.Abs(cConversationFont.Sizes[intBest] - afont.Size)) intBest = i;
+            acbo.SelectedIndex = intBest;
+            mblnLoading = blnWas;
+        }
 
         private void ShowPreview() {
             cComposeTheme t = Theme();
@@ -235,8 +272,12 @@ namespace AgentDockStandalone {
             mblnLoading = true;
             Select(lstColors,  pane == null ? cDockSettings.ComposeTheme     : cPaneThemes.ThemeFor(hwnd).Name);
             Select(lstBubbles, pane == null ? cDockSettings.BubbleStyle      : cPaneThemes.StyleFor(hwnd).Name);
-            Select(lstFonts,   pane == null ? cDockSettings.ConversationFont : cPaneThemes.FontFor(hwnd).Name);
-            Select(lstPromptFonts, pane == null ? cDockSettings.PromptFont : cPaneThemes.PromptFontFor(hwnd).Name);
+            cConversationFont font = pane == null ? cConversationFont.Named(cDockSettings.ConversationFont) : cPaneThemes.FontFor(hwnd);
+            cConversationFont fontPrompt = pane == null ? cConversationFont.Named(cDockSettings.PromptFont) : cPaneThemes.PromptFontFor(hwnd);
+            Select(lstFonts, font.BaseName);
+            Select(lstPromptFonts, fontPrompt.BaseName);
+            SyncSize(cboFontSize, font);
+            SyncSize(cboPromptSize, fontPrompt);
             mblnLoading = false;
             btnSavePane.Enabled = pane != null;
             btnGlobal.Enabled   = pane != null && !cPaneThemes.FollowsGlobal(hwnd);

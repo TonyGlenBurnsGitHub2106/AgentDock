@@ -27,6 +27,7 @@ namespace AgentDockStandalone {
         // Full Screen (Story 6845): pressed, the panes hide and the compose box fills the dock.
         private readonly CheckBox chkFull  = new CheckBox();
         private readonly Button  btnClear  = new Button();
+        private readonly Button  btnKeys   = new Button();
         private readonly ToolTip mtipButtons = new ToolTip();
         private TableLayoutPanel mpnlFull;
         private readonly ComboBox cboUpMode = new ComboBox();
@@ -136,20 +137,32 @@ namespace AgentDockStandalone {
             btnClear.Click += delegate { ClearScreen(); };
             mtipButtons.SetToolTip(btnClear, "Wipe the screen and scrollback of the pane in Send to, as cls does. The agent keeps its conversation.");
 
+            // Keys (Story 6847): the pane's screen in a window whose keys go to the pane, for
+            // picking from a menu (/resume, /skills, a question with choices). It also opens by
+            // itself when a menu shows (CheckMenu).
+            btnKeys.Text   = "Keys";
+            btnKeys.Dock   = DockStyle.Fill;
+            btnKeys.Margin = new Padding(0);
+            btnKeys.Click += delegate { OpenKeys(false, true); };
+            mtipButtons.SetToolTip(btnKeys, "Show the pane's screen in a window whose arrow keys, Enter and Esc go to the pane: pick from a menu or answer a question.");
+
             // Their own row under the buttons, so the row stays readable when the Send area is
             // narrow: Full Screen and Clear Screen side by side.
             TableLayoutPanel pnlFull = new TableLayoutPanel();
             pnlFull.Dock        = DockStyle.Top;
             pnlFull.Height      = RowHeight() + 3;
             pnlFull.Padding     = new Padding(0, 3, 0, 0);
-            pnlFull.ColumnCount = 2;
+            pnlFull.ColumnCount = 3;
             pnlFull.RowCount    = 1;
-            pnlFull.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            pnlFull.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            pnlFull.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 37F));
+            pnlFull.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 37F));
+            pnlFull.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 26F));
             pnlFull.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             chkFull.Margin = new Padding(0, 0, 3, 0);
             pnlFull.Controls.Add(chkFull, 0, 0);
+            btnClear.Margin = new Padding(0, 0, 3, 0);
             pnlFull.Controls.Add(btnClear, 1, 0);
+            pnlFull.Controls.Add(btnKeys, 2, 0);
             mpnlFull = pnlFull;
 
             // Send, Popup Answer and Copy share the top row, whatever the width.
@@ -276,6 +289,7 @@ namespace AgentDockStandalone {
                 RefreshTheme();            // another pane may have its own theme
                 if (++mintTicks % CNST_SAMPLE_EVERY_TICKS == 0) SampleTabColors();
                 if (mintTicks % CNST_STATE_EVERY_TICKS == 0) CheckAgentState();
+                if (mintTicks % CNST_MENU_EVERY_TICKS == 1) CheckMenu();
             };
             cboTarget.DropDown += delegate { SampleTabColors(); };
         }
@@ -570,7 +584,7 @@ namespace AgentDockStandalone {
             txtPrompt.ForeColor   = blnSys ? SystemColors.WindowText : aTheme.InputFore;
             txtPrompt.BorderStyle = blnSys ? BorderStyle.Fixed3D : BorderStyle.FixedSingle;
             lblTarget.ForeColor   = blnSys ? SystemColors.GrayText : aTheme.Caption;
-            foreach (Button b in new Button[] { btnSend, btnAnswer, btnCopy, btnClear }) {
+            foreach (Button b in new Button[] { btnSend, btnAnswer, btnCopy, btnClear, btnKeys }) {
                 if (blnSys) {
                     b.FlatStyle = FlatStyle.Standard;
                     b.BackColor = SystemColors.Control;
@@ -667,6 +681,53 @@ namespace AgentDockStandalone {
         // otherwise"). Every 2 ticks (0.8 s), for the pane in Send to. Raised with the words to
         // show and 1 working, 0 idle, -1 unknown (nothing shown).
         private const int CNST_STATE_EVERY_TICKS = 2;
+
+        // A menu in the pane (Story 6847, Tony: "The switch commands, like resume and skills ...
+        // do not pull up the options and such or allow selection, when typed in the compose box").
+        // /resume, /skills, /model, a question with choices or a permission prompt waits for arrow
+        // keys and Enter in the terminal, which the box cannot give and which is hidden in
+        // Conversation Panes. Every few ticks the pane's screen is read. When a menu's footer
+        // shows ("Esc to cancel" ...), the Keys window opens for it, and closes once the pick is
+        // made. It takes the keyboard only when you were writing here or have just sent from
+        // here. A dock pane with its terminal in view opens it only then too, since you may be
+        // working in the terminal itself.
+        private const int CNST_MENU_EVERY_TICKS = 3;
+        private DateTime mdtSent = DateTime.MinValue;
+        private bool mblnMenuSeen;
+        private IntPtr mhwndMenuPane = IntPtr.Zero;
+
+        private void CheckMenu() {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            if (pane == null || pane.IsDisposed || !this.Visible) { mblnMenuSeen = false; return; }
+            if (pane.AbsorbedHwnd != mhwndMenuPane) { mhwndMenuPane = pane.AbsorbedHwnd; mblnMenuSeen = false; }
+            Form frmDock = this.FindForm();
+            if (frmDock == null || frmDock.WindowState == FormWindowState.Minimized) return;
+            if (!cDockSettings.KeysAutoOpen || fPaneKeys.IsOpenFor(pane)) return;
+            bool blnShowing = fPaneKeys.MenuShowing(cConsoleInput.ReadScreen(pane.AbsorbedHwnd));
+            bool blnNew = blnShowing && !mblnMenuSeen;
+            mblnMenuSeen = blnShowing;
+            if (!blnNew) return;
+            // "Yours": the keyboard is (or was, before you switched away) in this box, or you sent from it just now.
+            Control ctlActive = frmDock.ActiveControl;
+            bool blnMine = this.ContainsFocus || (ctlActive != null && this.Contains(ctlActive))
+                || (DateTime.Now - mdtSent).TotalSeconds < 30;
+            if (!blnMine && !IsCard && !cDockSettings.ConversationPanes) return;
+            bool blnActivate = blnMine && frmDock.IsHandleCreated && Win32.GetForegroundWindow() == frmDock.Handle;
+            OpenKeys(true, blnActivate);
+        }
+
+        // Opens the Keys window for the pane in Send to.
+        private void OpenKeys(bool ablnAuto, bool ablnActivate) {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            if (pane == null) {
+                mactStatus("Pick a pane in Send to (or click inside one) first.");
+                return;
+            }
+            fPaneKeys.Open(this.FindForm(), pane, ablnAuto, ablnActivate);
+            mactStatus(ablnAuto
+                ? pane.Text + " shows a menu. Pick from it in the Keys window: arrows, Enter, Esc."
+                : "Keys you press in the Keys window go to " + pane.Text + ".");
+        }
         public event Action<string, int> AgentStateChanged;
         private string mstrLastState;
 
@@ -914,6 +975,7 @@ namespace AgentDockStandalone {
                 }
                 Remember(strText);
                 txtPrompt.Clear();
+                mdtSent = DateTime.Now;
                 mactStatus("Sent to " + pane.Text + ".");
             };
             t.Start();
@@ -1019,15 +1081,15 @@ namespace AgentDockStandalone {
             Font fntButton = new Font("Segoe UI", 8.25F);
             btnAnswer.Text = "Popup";
             btnClear.Text  = "Clear";
-            Button[] aButtons = new Button[] { btnSend, btnAnswer, btnCopy, btnClear };
+            Button[] aButtons = new Button[] { btnSend, btnAnswer, btnCopy, btnClear, btnKeys };
             int intRow = fntButton.Height + 12;
             int intWide = 0;
             foreach (Button b in aButtons) intWide = Math.Max(intWide, TextRenderer.MeasureText(b.Text, fntButton).Width);
             TableLayoutPanel tblCard = new TableLayoutPanel();
             tblCard.Dock        = DockStyle.Top;
             tblCard.ColumnCount = 1;
-            tblCard.RowCount    = 4;
-            tblCard.Height      = 4 * (intRow + 2);
+            tblCard.RowCount    = aButtons.Length;
+            tblCard.Height      = aButtons.Length * (intRow + 2);
             tblCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             for (int i = 0; i < aButtons.Length; i++) {
                 tblCard.RowStyles.Add(new RowStyle(SizeType.Absolute, intRow + 2));

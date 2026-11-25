@@ -205,9 +205,10 @@ to the end).
   Synthwave), **Bubbles** (21 styles from plain to fancy: Plain, Notebook, Minimal, Compact, Boxed,
   Classic, the default, Roomy, Outline, Dashed, Soft, Pill, Accent, Double, Chat, Solid, Card,
   Shadowed, Glow, Neon, Comic and Fancy), **Font** (the conversation's letters) and **Prompt Font**
-  (the compose box's letters). Colors and bubbles are also on the Settings menu as **Compose Box
-  Theme** and **Bubble Style**.
-- **Settings -> Palette** is where to try them: four lists and a live preview of a short
+  (the compose box's letters). Each font comes with a **size**, from 7 to 24 points: picking a font
+  puts its usual size in the Size list under it, and any other size can be picked from there.
+  Colors and bubbles are also on the Settings menu as **Compose Box Theme** and **Bubble Style**.
+- **Settings -> Palette** is where to try them: four lists, a Size list under each font list, and a live preview of a short
   conversation. Step through a list with the arrow keys and the preview changes at once. Pick
   **Global look** or a pane in **Pane**, then **Save for All Panes** (the global look) or **Save for
   Pane** (that pane's own). **Use Global** puts the pane back on the global look. Nothing changes
@@ -217,6 +218,7 @@ to the end).
   is there, until you press **Use Global** for it. So the panes can always load in different styles.
   A pane can override any of the four and follow the global look in the rest. **Settings -> Pane
   Theme** (for the pane you last clicked) has the same choices as menus, plus Use Global and Palette.
+  Each font menu ends in **Size**, which changes the size of the font the pane shows now.
   The compose box shows each pane in its own look as you move between panes.
 
 - **Copy**, beside Popup Answer, copies what is selected in the box, or all of it when nothing is.
@@ -241,6 +243,7 @@ to the end).
   kept anywhere. It reads the answer from Claude Code's or GitHub Copilot CLI's own record of the
   session, so it shows the answer as the agent wrote it, without the terminal's wrapping. While the
   agent is still working, it shows the latest thing it has written so far.
+- **Keys**, beside Clear Screen, is for menus. See *Menus and the Keys window* below.
 - You can still type in the terminals directly. The answers show in the panes as always.
 
 If a prompt cannot be sent, it stays in the box and the status bar says why. A pane running as
@@ -252,7 +255,7 @@ administrator can only be reached while the dock itself runs as administrator.
 
 **Settings -> Conversation Panes** hides every terminal and shows each one as its conversation
 instead: one conversation pane per terminal, in the dock's pane order. Each has its own text box,
-Send, Popup Answer, Copy and Clear Screen, and sends only to its own terminal. Its header shows the
+Send, Popup Answer, Copy, Clear Screen and Keys, and sends only to its own terminal. Its header shows the
 pane's number and name on its tab's color and **Thinking...** or **Idle**, and has three buttons:
 
 - **Theme**: that pane's own colors, bubbles and fonts, Use Global, and the Palette (a right-click
@@ -271,6 +274,30 @@ you last clicked, so **Agents -> Close Active Pane** and the rest act on it.
 The terminals keep running, hidden. A pane opened or closed while conversation panes are on gets or
 loses its conversation pane within a second. The dock's own compose box is hidden meanwhile and comes
 back as it was when you turn conversation panes off. The dock remembers the setting.
+
+## Menus and the Keys window
+
+Some commands open a menu in the terminal instead of answering: `/resume`, `/skills`, `/model`,
+`/config` and the like, and an agent's question with choices or a permission prompt. A menu wants
+the arrow keys, Enter and Esc, which a typed prompt cannot give, and in conversation panes the
+terminal is hidden. The **Keys** window is for them.
+
+- **It opens by itself** when the pane you are writing to shows a menu, a second or two after it
+  appears. It shows the pane's screen as it is now, and **every key you press in it goes to the
+  pane**: the arrows, Enter, Esc, Tab, Space, Backspace, letters (many menus have a search box) and
+  Ctrl+letter. The buttons along its bottom (Up, Down, Left, Right, Enter, Esc, Tab, Space, 1 to 4)
+  do the same for the mouse.
+- **It closes by itself** once the pick is made and the menu is gone. Close it yourself any time.
+- **When it opens by itself:** always for a conversation pane, since its terminal is hidden. For the
+  dock's own compose box, when you were writing in the box or sent from it in the last half minute,
+  because otherwise you may be working in the terminal itself. It takes the keyboard only if you were
+  writing in the dock.
+- **The Keys button** (on the compose box, and on each conversation pane) opens it at any time.
+- Untick **Open by itself when a pane shows a menu** in the window to have it open only from the
+  button. The dock remembers it.
+
+It spots a menu by the hint line agents print under one ("Enter to select", "Esc to cancel", "Esc to
+close").
 
 ## Popups and Resend
 
@@ -363,4 +390,7 @@ AgentDockStandalone.exe --help           Show these options
 - **Build:** `build.cmd` uses the C# compiler built into Windows (.NET Framework 4.8), so no
   Visual Studio is needed. The code stays within C# 5 for that reason. Visual Studio or MSBuild
   can build `AgentDockStandalone.csproj` too (output in `bin\Release\`).
+- **The compose box and the Keys window** reach a pane through its console: the dock attaches to
+  the console behind the Windows Terminal window, writes key events to its input (prompts, and the
+  codes a terminal sends for the arrows, Esc and the like) and reads its screen back.
 - **Help:** this file is read from `docs\AgentDock.md` in the Agent Dock folder each time Help is opened.

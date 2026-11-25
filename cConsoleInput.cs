@@ -63,6 +63,71 @@ namespace AgentDockStandalone {
             });
         }
 
+        // Presses keys in the pane (Story 6847, the Keys window): astrKeys goes in as typed, so
+        // arrow keys and the like are sent as the codes a terminal sends for them (KeyCode).
+        // Nothing is pasted and no Enter is added.
+        public static string PressKeys(IntPtr ahwndTerminal, string astrKeys) {
+            if (String.IsNullOrEmpty(astrKeys)) return null;
+            return Write(ahwndTerminal, astrKeys);
+        }
+
+        // What a terminal sends for a key that is not a letter (the codes Windows Terminal sends).
+        // Null for a key that has none here.
+        public static string KeyCode(System.Windows.Forms.Keys akey) {
+            System.Windows.Forms.Keys k = akey & System.Windows.Forms.Keys.KeyCode;
+            bool blnShift = (akey & System.Windows.Forms.Keys.Shift) == System.Windows.Forms.Keys.Shift;
+            switch (k) {
+                case System.Windows.Forms.Keys.Up:       return "\u001b[A";
+                case System.Windows.Forms.Keys.Down:     return "\u001b[B";
+                case System.Windows.Forms.Keys.Right:    return "\u001b[C";
+                case System.Windows.Forms.Keys.Left:     return "\u001b[D";
+                case System.Windows.Forms.Keys.Home:     return "\u001b[H";
+                case System.Windows.Forms.Keys.End:      return "\u001b[F";
+                case System.Windows.Forms.Keys.PageUp:   return "\u001b[5~";
+                case System.Windows.Forms.Keys.PageDown: return "\u001b[6~";
+                case System.Windows.Forms.Keys.Delete:   return "\u001b[3~";
+                case System.Windows.Forms.Keys.Tab:      return blnShift ? "\u001b[Z" : "\t";
+                case System.Windows.Forms.Keys.Return:   return "\r";
+                case System.Windows.Forms.Keys.Escape:   return "\u001b";
+                case System.Windows.Forms.Keys.Back:     return "\u007f";
+            }
+            return null;
+        }
+
+        // The lines the pane shows now (its visible window), or null when it cannot be read.
+        // Used by the Keys window and to notice a menu waiting for a pick (cComposeBox).
+        public static string[] ReadScreen(IntPtr ahwndTerminal) {
+            string[] astrLines = null;
+            WithConsole(ahwndTerminal, delegate {
+                IntPtr hOut = CreateFile("CONOUT$", GENERIC_READ | GENERIC_WRITE,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+                if (hOut == INVALID_HANDLE_VALUE) return "Could not open the pane's screen.";
+                try {
+                    CONSOLE_SCREEN_BUFFER_INFO info;
+                    if (!GetConsoleScreenBufferInfo(hOut, out info)) return "Could not read the pane's screen.";
+                    int intTop = info.srWindow.Top, intBottom = info.srWindow.Bottom;
+                    int intLeft = info.srWindow.Left, intWidth = info.srWindow.Right - info.srWindow.Left + 1;
+                    if (intWidth <= 0 || intBottom < intTop) return "The pane's screen is empty.";
+                    if (intBottom - intTop > 300) intTop = intBottom - 300;
+                    List<string> lst = new List<string>();
+                    for (int y = intTop; y <= intBottom; y++) {
+                        System.Text.StringBuilder sb = new System.Text.StringBuilder(intWidth + 1);
+                        uint intRead;
+                        uint intCoord = (uint)((y << 16) | (intLeft & 0xFFFF));
+                        if (!ReadConsoleOutputCharacter(hOut, sb, (uint)intWidth, intCoord, out intRead)) { lst.Add(""); continue; }
+                        string strLine = sb.ToString();
+                        if (strLine.Length > intRead) strLine = strLine.Substring(0, (int)intRead);
+                        lst.Add(strLine.TrimEnd());
+                    }
+                    astrLines = lst.ToArray();
+                    return null;
+                } finally {
+                    CloseHandle(hOut);
+                }
+            });
+            return astrLines;
+        }
+
         // Attaches to the console behind ahwndTerminal, runs afnc there and lets go again.
         private static string WithConsole(IntPtr ahwndTerminal, Func<string> afnc) {
             if (ahwndTerminal == IntPtr.Zero || !IsWindow(ahwndTerminal)) return "That pane has closed.";
@@ -203,6 +268,27 @@ namespace AgentDockStandalone {
             [FieldOffset(0)] public ushort           EventType;
             [FieldOffset(4)] public KEY_EVENT_RECORD KeyEvent;
         }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct COORD { public short X; public short Y; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SMALL_RECT { public short Left; public short Top; public short Right; public short Bottom; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct CONSOLE_SCREEN_BUFFER_INFO {
+            public COORD      dwSize;
+            public COORD      dwCursorPosition;
+            public ushort     wAttributes;
+            public SMALL_RECT srWindow;
+            public COORD      dwMaximumWindowSize;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetConsoleScreenBufferInfo(IntPtr hConsoleOutput, out CONSOLE_SCREEN_BUFFER_INFO lpInfo);
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "ReadConsoleOutputCharacterW")]
+        private static extern bool ReadConsoleOutputCharacter(IntPtr hConsoleOutput, System.Text.StringBuilder lpCharacter,
+            uint nLength, uint dwReadCoord, out uint lpNumberOfCharsRead);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool AttachConsole(uint dwProcessId);

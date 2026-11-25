@@ -159,6 +159,19 @@ namespace AgentDockStandalone {
             Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
         }
 
+        // The Keys window opens by itself when a pane shows a menu waiting for a pick (Story 6847:
+        // /resume, /skills, /model, a question with choices, a permission prompt).
+        public const string KEY_KEYS_AUTO_OPEN = "KeysOpenForMenus";
+
+        public static bool KeysAutoOpen {
+            get { return ReadBool(KEY_KEYS_AUTO_OPEN, true); }
+        }
+
+        public static void SaveKeysAutoOpen(bool ablnOn) {
+            mdicValues[KEY_KEYS_AUTO_OPEN] = ablnOn ? "true" : "false";
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
+        }
+
         // The dock's own compose box with its Send area folded away (Story 6846, the collapse strip
         // at its right edge). Conversation panes remember theirs per place (cPaneThemes).
         public const string KEY_COMPOSE_SEND_HIDDEN = "ComposeSendHidden";
@@ -383,7 +396,11 @@ namespace AgentDockStandalone {
                  + KEY_PROMPT_FONT + " = " + PromptFont + "\r\n"
                  + "\r\n"
                  + "# true: the compose box's Send area is folded away (the > strip at its right edge).\r\n"
-                 + KEY_COMPOSE_SEND_HIDDEN + " = " + (ComposeSendHidden ? "true" : "false") + "\r\n";
+                 + KEY_COMPOSE_SEND_HIDDEN + " = " + (ComposeSendHidden ? "true" : "false") + "\r\n"
+                 + "\r\n"
+                 + "# true: the Keys window opens by itself when a pane shows a menu to pick from\r\n"
+                 + "#   (/resume, /skills, a question with choices). A check box in the Keys window.\r\n"
+                 + KEY_KEYS_AUTO_OPEN + " = " + (KeysAutoOpen ? "true" : "false") + "\r\n";
         }
     }
 }

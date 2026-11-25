@@ -260,13 +260,29 @@ namespace AgentDockStandalone {
             miGlobal.Click += delegate { SayThemeSaved(afncSet(null), astrPane + ": the global " + astrWhat + " font."); };
             miFont.DropDownItems.Add(miGlobal);
             miFont.DropDownItems.Add(new ToolStripSeparator());
+            string strOwnBase = astrOwn == null ? null : cConversationFont.Named(astrOwn).BaseName;
             foreach (cConversationFont f in cConversationFont.All) {
                 string strName = f.Name;
                 ToolStripMenuItem mi = new ToolStripMenuItem(strName);
-                mi.Checked = astrOwn == strName;
+                mi.Checked = strOwnBase == strName;
                 mi.Click += delegate { SayThemeSaved(afncSet(strName), astrPane + ": " + strName + " " + astrWhat + " font."); };
                 miFont.DropDownItems.Add(mi);
             }
+            // The size of the font the pane shows now (Tony: "pick font and font size").
+            cConversationFont fontNow = cConversationFont.Named(astrOwn ?? astrGlobal);
+            miFont.DropDownItems.Add(new ToolStripSeparator());
+            ToolStripMenuItem miSize = new ToolStripMenuItem("&Size (" + cConversationFont.SizeText(fontNow.Size) + " pt)");
+            foreach (float fltSize in cConversationFont.Sizes) {
+                float fltThis = fltSize;
+                ToolStripMenuItem mi = new ToolStripMenuItem(cConversationFont.SizeText(fltThis) + " pt");
+                mi.Checked = Math.Abs(fontNow.Size - fltThis) < 0.01F;
+                mi.Click += delegate {
+                    cConversationFont sized = fontNow.WithSize(fltThis);
+                    SayThemeSaved(afncSet(sized.Name), astrPane + ": " + sized.Name + " " + astrWhat + " font.");
+                };
+                miSize.DropDownItems.Add(mi);
+            }
+            miFont.DropDownItems.Add(miSize);
             return miFont;
         }
 

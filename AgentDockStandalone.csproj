@@ -71,6 +71,9 @@
     <Compile Include="fPalette.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="fPaneKeys.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="cAgentHistory.cs" />
     <Compile Include="cCopilotHistory.cs" />
     <Compile Include="cHistoryEntry.cs" />
