@@ -151,7 +151,7 @@ namespace AgentDockStandalone {
                 if (mintHistoryAt >= 0) { mintHistoryAt = -1; SetPrompt(mstrDraft); }
                 ApplyLive();
                 mactStatus(eMode == eUpMode.Live
-                    ? "Run conversation: the conversation shows above the text and stays current. Click a bubble to read all of it. Up steps through your prompts."
+                    ? "Run conversation: the conversation shows above the text and stays current. Right-click a bubble to open or copy it. Up steps through your prompts."
                     : "Up now steps through " + UpModeWords(eMode) + ".");
             };
             cboUpMode.DropDownClosed += delegate { txtPrompt.Focus(); };
@@ -208,6 +208,7 @@ namespace AgentDockStandalone {
             vwLive.Dock    = DockStyle.Fill;
             vwLive.Visible = false;
             vwLive.BubbleClicked += new Action<cHistoryEntry>(OpenBubble);
+            vwLive.Status        += delegate(string astr) { mactStatus(astr); };
             splPrompt.Dock      = DockStyle.Bottom;
             splPrompt.Height    = 5;
             splPrompt.MinSize   = 34;
@@ -385,7 +386,7 @@ namespace AgentDockStandalone {
 
         private Form mfrmLiveShowing;   // the pane the view was last emptied for
 
-        // A bubble clicked: its whole text in the answer popup.
+        // Popup on a bubble's right-click menu: its whole text in the answer window.
         private void OpenBubble(cHistoryEntry aEntry) {
             fAgentAbsorbedTerminal pane = mfncTarget();
             string strPane = pane == null ? "Agent Dock" : pane.Text;

@@ -169,8 +169,7 @@ to the end).
   rounder bubbles, the agent's answers at the left in squarer ones, each kind in its own color and
   outlined. Only what was said shows: no thinking and no tool calls. It stays current while the
   agent works (it looks every second or two), and stays at the bottom unless you have scrolled up
-  to read. A long message is cut short in its bubble; **click any bubble** to open the whole of it
-  in the answer window (select, edit, Copy). Drag the bar between the conversation and the text to
+  to read. A long message is cut short in its bubble. **Right-click any bubble** for **Popup** (the whole message in the answer window, where you can select, edit and copy) or **Copy** (the whole message). A left click does nothing. Drag the bar between the conversation and the text to
   give either more room. The box grows to make room when Run conversation is picked, and goes back
   to its height when you pick another choice. While it is on, Up steps through your prompts.
 - **Full Screen**, under Send, hides the panes and lets the compose box fill the dock, so with Run

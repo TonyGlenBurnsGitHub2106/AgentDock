@@ -9,8 +9,10 @@ namespace AgentDockStandalone {
     // Run conversation (Story 6845): the pane's conversation as chat bubbles, newest at the
     // bottom. Your prompts sit at the right in rounder bubbles, the agent's answers at the left in
     // squarer ones, each in its own theme colors and outlined. Only what was said is shown: no
-    // thinking, no tool calls. A long one is cut short in its bubble. Clicking a bubble opens the
-    // whole text in the answer popup (BubbleClicked).
+    // thinking, no tool calls. A long one is cut short in its bubble. Right-clicking a bubble
+    // offers Popup (the whole text in the answer window, BubbleClicked) and Copy (Tony,
+    // 2026-11-25: "don't do the popup on click ... right click a message, then popup from a
+    // context menu, or copy"). A left click does nothing.
     internal sealed class cConversationView : Panel {
 
         private const int CNST_MARGIN        = 10;   // from the sides of the view
@@ -20,7 +22,7 @@ namespace AgentDockStandalone {
         private const int CNST_ANSWER_RADIUS = 4;
         private const int CNST_SHOW_LINES    = 14;   // a longer one is cut short in its bubble
         private const int CNST_SHOW_CHARS    = 1500;
-        private const string CNST_MORE       = "\r\n... click to read all of it";
+        private const string CNST_MORE       = "\r\n... right-click, Popup, to read all of it";
 
         private sealed class Bubble {
             public cHistoryEntry Entry;
@@ -238,27 +240,63 @@ namespace AgentDockStandalone {
 
         protected override void OnMouseMove(MouseEventArgs e) {
             base.OnMouseMove(e);
+            if (mMenu != null && mMenu.Visible) return;     // keep the bubble the menu is for outlined
             Bubble b = HitTest(e.Location);
             if (b == mHover) return;
             mHover = b;
-            this.Cursor = b == null ? Cursors.Default : Cursors.Hand;
             Invalidate();
         }
 
         protected override void OnMouseLeave(EventArgs e) {
             base.OnMouseLeave(e);
-            if (mHover != null) { mHover = null; this.Cursor = Cursors.Default; Invalidate(); }
+            if (mMenu != null && mMenu.Visible) return;
+            if (mHover != null) { mHover = null; Invalidate(); }
         }
 
-        protected override void OnMouseClick(MouseEventArgs e) {
-            base.OnMouseClick(e);
-            if (e.Button != MouseButtons.Left) return;
+        // Right-click on a bubble: Popup or Copy.
+        private ContextMenuStrip mMenu;
+        private cHistoryEntry    mMenuEntry;
+
+        protected override void OnMouseUp(MouseEventArgs e) {
+            base.OnMouseUp(e);
+            if (e.Button != MouseButtons.Right) return;
             Bubble b = HitTest(e.Location);
-            if (b != null && BubbleClicked != null) BubbleClicked(b.Entry);
+            if (b == null) return;
+            mHover = b;
+            Invalidate();
+            mMenuEntry = b.Entry;
+            if (mMenu == null) {
+                mMenu = new ContextMenuStrip();
+                ToolStripMenuItem miPopup = new ToolStripMenuItem("&Popup");
+                miPopup.ToolTipText = "Open the whole message in a window you can select, edit and copy in.";
+                miPopup.Click += delegate { if (mMenuEntry != null && BubbleClicked != null) BubbleClicked(mMenuEntry); };
+                ToolStripMenuItem miCopy = new ToolStripMenuItem("&Copy");
+                miCopy.ToolTipText = "Copy the whole message.";
+                miCopy.Click += delegate { CopyEntry(mMenuEntry); };
+                mMenu.Items.Add(miPopup);
+                mMenu.Items.Add(miCopy);
+                mMenu.Closed += delegate { mHover = null; Invalidate(); };
+            }
+            mMenu.Show(this, e.Location);
+        }
+
+        // Raised with a short line for the status bar after Copy.
+        public event Action<string> Status;
+
+        private void CopyEntry(cHistoryEntry aEntry) {
+            if (aEntry == null) return;
+            string strText = (aEntry.Text ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\r\n");
+            if (strText.Length == 0) return;
+            try {
+                Clipboard.SetText(strText);
+                if (Status != null) Status(aEntry.IsAnswer ? "Copied the answer." : "Copied your prompt.");
+            } catch (Exception ex) {
+                if (Status != null) Status("Not copied: " + ex.Message);
+            }
         }
 
         protected override void Dispose(bool ablnDisposing) {
-            if (ablnDisposing) mfntCaption.Dispose();
+            if (ablnDisposing) { mfntCaption.Dispose(); if (mMenu != null) mMenu.Dispose(); }
             base.Dispose(ablnDisposing);
         }
     }
