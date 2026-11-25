@@ -140,7 +140,7 @@ namespace AgentDockStandalone {
             // narrow: Full Screen and Clear Screen side by side.
             TableLayoutPanel pnlFull = new TableLayoutPanel();
             pnlFull.Dock        = DockStyle.Top;
-            pnlFull.Height      = 30;
+            pnlFull.Height      = RowHeight() + 3;
             pnlFull.Padding     = new Padding(0, 3, 0, 0);
             pnlFull.ColumnCount = 2;
             pnlFull.RowCount    = 1;
@@ -156,7 +156,7 @@ namespace AgentDockStandalone {
             TableLayoutPanel tblButtons = new TableLayoutPanel();
             mtblButtons = tblButtons;
             tblButtons.Dock        = DockStyle.Top;
-            tblButtons.Height      = 30;
+            tblButtons.Height      = RowHeight();
             tblButtons.ColumnCount = 3;
             tblButtons.RowCount    = 1;
             tblButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
@@ -198,7 +198,7 @@ namespace AgentDockStandalone {
             cboUpMode.DropDownClosed += delegate { txtPrompt.Focus(); };
 
             pnlLabelRow.Dock    = DockStyle.Top;
-            pnlLabelRow.Height  = 28;
+            pnlLabelRow.Height  = RowHeight() - 2;
             pnlLabelRow.Padding = new Padding(0, 2, 0, 4);
             pnlLabelRow.Controls.Add(lblTarget);
             pnlLabelRow.Controls.Add(cboUpMode);
@@ -278,6 +278,12 @@ namespace AgentDockStandalone {
                 if (mintTicks % CNST_STATE_EVERY_TICKS == 0) CheckAgentState();
             };
             cboTarget.DropDown += delegate { SampleTabColors(); };
+        }
+
+        // The height of a row of buttons: 30 pixels at 100% display scaling, more as Windows
+        // scaling makes the letters bigger (Story 6846, text cut off on a small laptop).
+        private int RowHeight() {
+            return Math.Max(30, btnSend.Font.Height + 14);
         }
 
         // The dock's own box remembers the Send area's width. A conversation pane does not.
@@ -1007,50 +1013,51 @@ namespace AgentDockStandalone {
             // it takes up too much space"). The > strip at the far right folds even that away.
             mtblButtons.Visible = false;
             mpnlFull.Visible    = false;
+            // Every size here comes from the text (Tony: "On a smaller laptop, the text of the side
+            // button are cut off"): the dock follows Windows' display scaling, so at 125% or 150%
+            // the letters grow, and sizes fixed in pixels cut them off.
+            Font fntButton = new Font("Segoe UI", 8.25F);
+            btnAnswer.Text = "Popup";
+            btnClear.Text  = "Clear";
+            Button[] aButtons = new Button[] { btnSend, btnAnswer, btnCopy, btnClear };
+            int intRow = fntButton.Height + 12;
+            int intWide = 0;
+            foreach (Button b in aButtons) intWide = Math.Max(intWide, TextRenderer.MeasureText(b.Text, fntButton).Width);
             TableLayoutPanel tblCard = new TableLayoutPanel();
             tblCard.Dock        = DockStyle.Top;
             tblCard.ColumnCount = 1;
             tblCard.RowCount    = 4;
-            tblCard.Height      = 4 * 26;
+            tblCard.Height      = 4 * (intRow + 2);
             tblCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            Button[] aButtons = new Button[] { btnSend, btnAnswer, btnCopy, btnClear };
             for (int i = 0; i < aButtons.Length; i++) {
-                tblCard.RowStyles.Add(new RowStyle(SizeType.Absolute, 26F));
+                tblCard.RowStyles.Add(new RowStyle(SizeType.Absolute, intRow + 2));
                 aButtons[i].Parent = null;
                 aButtons[i].Dock   = DockStyle.Fill;
                 aButtons[i].Margin = new Padding(0, 0, 0, 2);
-                aButtons[i].Font   = new Font("Segoe UI", 8.25F);
+                aButtons[i].Font   = fntButton;
                 tblCard.Controls.Add(aButtons[i], 0, i);
             }
-            btnAnswer.Text = "Popup";
-            btnClear.Text  = "Clear";
             mtipButtons.SetToolTip(btnAnswer, "The latest answer in a window you can edit, copy and resend.");
             pnlRight.Controls.Add(tblCard);
             // A gap under the header, so the first button is not pressed against it (Tony: "the
             // button on the right look slightly cut off at the top").
             pnlRight.Padding = new Padding(4, 5, 2, 0);
-            pnlRight.Width   = CNST_CARD_SEND_WIDTH;
+            pnlRight.Width   = Math.Max(CNST_CARD_SEND_WIDTH, intWide + 30);
             splSend.Width    = 3;
 
+            lblHeader.Font      = new Font("Segoe UI", 9F, FontStyle.Bold);
+            lblState.Font       = new Font("Segoe UI", 8.5F, FontStyle.Bold);
             pnlHeader.Dock    = DockStyle.Top;
-            pnlHeader.Height  = 26;
+            pnlHeader.Height  = Math.Max(lblHeader.Font.Height, lblState.Font.Height) + 12;
             pnlHeader.Padding = new Padding(6, 0, 2, 0);
             lblHeader.Dock      = DockStyle.Fill;
             lblHeader.TextAlign = ContentAlignment.MiddleLeft;
             lblHeader.AutoEllipsis = true;
-            lblHeader.Font      = new Font("Segoe UI", 9F, FontStyle.Bold);
             lblState.Dock       = DockStyle.Right;
             lblState.AutoSize   = false;
-            lblState.Width      = 86;
+            lblState.Width      = TextRenderer.MeasureText("Thinking...", lblState.Font).Width + 16;
             lblState.TextAlign  = ContentAlignment.MiddleCenter;
-            lblState.Font       = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-            btnTheme.Text       = "Theme";
-            btnTheme.Dock       = DockStyle.Right;
-            btnTheme.Width      = 62;
-            btnTheme.FlatStyle  = FlatStyle.Flat;
-            btnTheme.FlatAppearance.BorderSize = 0;
-            btnTheme.Font       = new Font("Segoe UI", 8.25F);
-            mtipButtons.SetToolTip(btnTheme, "This pane's own colors and bubbles, or the dock's.");
+            HeaderButton(btnTheme, "Theme", 0, "This pane's own colors, bubbles and fonts, or the global look.");
             btnTheme.Click += delegate {
                 if (ThemeMenuWanted != null) ThemeMenuWanted(this, btnTheme, new Point(0, btnTheme.Height));
             };
@@ -1072,6 +1079,7 @@ namespace AgentDockStandalone {
             HeaderButton(btnSendArea, "Hide Options", 86, "Hide or show the options at the right of this pane (Send, Popup, Copy, Clear). Enter still sends. Remembered for this pane's place.");
             btnSendArea.Click += delegate { ToggleSendArea(); };
 
+            pnlHeader.Resize += delegate { FitHeader(); };
             pnlHeader.Controls.Add(lblHeader);
             pnlHeader.Controls.Add(btnTheme);
             pnlHeader.Controls.Add(btnGlobal);
@@ -1089,14 +1097,37 @@ namespace AgentDockStandalone {
         private readonly Button btnGlobal   = new Button();
         private readonly Button btnSendArea = new Button();
 
+        // A flat header button as wide as its longest text needs (aintWidth is ignored, kept so the
+        // calls read as before). "Hide Options" is measured with "Show Options", its other face.
         private void HeaderButton(Button ab, string astrText, int aintWidth, string astrTip) {
             ab.Text      = astrText;
             ab.Dock      = DockStyle.Right;
-            ab.Width     = aintWidth;
             ab.FlatStyle = FlatStyle.Flat;
             ab.FlatAppearance.BorderSize = 0;
             ab.Font      = new Font("Segoe UI", 8.25F);
+            int w = TextRenderer.MeasureText(astrText, ab.Font).Width;
+            if (astrText == "Hide Options") w = Math.Max(w, TextRenderer.MeasureText("Show Options", ab.Font).Width);
+            ab.Width     = w + 16;
             mtipButtons.SetToolTip(ab, astrTip);
+        }
+
+        // A narrow pane drops header buttons, least needed first, so the title keeps some room and
+        // Idle / Thinking always shows (Tony: "the idle button does not show at all"). What they
+        // do stays one click away: right-click the header, or the > strip at the right edge.
+        private bool mblnGlobalWanted;
+        private const int CNST_TITLE_MIN = 70;
+
+        private void FitHeader() {
+            if (!IsCard) return;
+            int intRoom = pnlHeader.ClientSize.Width - pnlHeader.Padding.Horizontal - CNST_TITLE_MIN
+                        - (lblState.Visible ? lblState.Width : 0);
+            Button[] aByNeed = new Button[] { btnTheme, btnGlobal, btnSendArea };   // most needed first
+            foreach (Button b in aByNeed) {
+                bool blnWanted = b != btnGlobal || mblnGlobalWanted;
+                bool blnShow = blnWanted && intRoom >= b.Width;
+                if (blnShow) intRoom -= b.Width;
+                if (b.Visible != blnShow) b.Visible = blnShow;
+            }
         }
 
         private void PaintHeader() {
@@ -1113,14 +1144,14 @@ namespace AgentDockStandalone {
                 b.FlatAppearance.MouseOverBackColor = Blend(clrBack, clrText, 0.2);
             }
             // Use Global only shows while the pane has a look of its own.
-            bool blnOwn = !cPaneThemes.FollowsGlobal(mfrmPane.AbsorbedHwnd);
-            if (btnGlobal.Visible != blnOwn) btnGlobal.Visible = blnOwn;
+            mblnGlobalWanted = !cPaneThemes.FollowsGlobal(mfrmPane.AbsorbedHwnd);
             string strTitle = (mintNumber > 0 ? mintNumber + ". " : "") + (mfrmPane.IsDisposed ? "" : mfrmPane.Text);
             if (lblHeader.Text != strTitle) lblHeader.Text = strTitle;
             lblState.Visible   = mintCardState >= 0;
             lblState.Text      = mintCardState == 1 ? "Thinking..." : "Idle";
             lblState.BackColor = mintCardState == 1 ? Color.FromArgb(255, 214, 120) : Color.FromArgb(170, 225, 170);
             lblState.ForeColor = Color.Black;
+            FitHeader();
         }
 
         // Called by the dock about once a second: the pane's title and tab color may have changed.
