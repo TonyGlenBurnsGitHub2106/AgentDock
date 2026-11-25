@@ -216,49 +216,72 @@ namespace AgentDockShared {
             mstrTiling = astrMode;
             List<Form> lst = OrderedPanes();
             Rectangle area = ClientArea();
-            if (lst.Count == 0 || area.Width <= 0 || area.Height <= 0) return;
+            if (lst.Count == 0 || area.Width <= 0 || area.Height <= 0) { RaiseLayoutChanged(); return; }
 
             mfrmHost.SuspendLayout();
             try {
-                int n = lst.Count;
-                if (astrMode == CNST_TILE_HORIZONTAL) {
-                    for (int i = 0; i < n; i++) {
-                        int top = area.Height * i / n, bottom = area.Height * (i + 1) / n;
-                        Place(lst[i], 0, top, area.Width, bottom - top);
-                    }
-                } else if (astrMode == CNST_TILE_CASCADE) {
-                    int w = Math.Max(area.Width  - CNST_CASCADE_STEP * (n - 1), area.Width  / 2);
-                    int h = Math.Max(area.Height - CNST_CASCADE_STEP * (n - 1), area.Height / 2);
-                    for (int i = 0; i < n; i++) {
-                        Place(lst[i], CNST_CASCADE_STEP * i, CNST_CASCADE_STEP * i, w, h);
-                        lst[i].BringToFront();
-                    }
-                } else if (astrMode == CNST_TILE_QUAD && n <= 4) {
-                    int hw = area.Width / 2, hh = area.Height / 2;
-                    Rectangle[] r = new Rectangle[] {
-                        new Rectangle(0,  0,  hw,              hh),
-                        new Rectangle(hw, 0,  area.Width - hw, hh),
-                        new Rectangle(0,  hh, hw,              area.Height - hh),
-                        new Rectangle(hw, hh, area.Width - hw, area.Height - hh) };
-                    for (int i = 0; i < n; i++) Place(lst[i], r[i].X, r[i].Y, r[i].Width, r[i].Height);
-                } else {
-                    // Vertical: side-by-side columns. Also quad with more than four panes.
-                    for (int i = 0; i < n; i++) {
-                        int left = area.Width * i / n, right = area.Width * (i + 1) / n;
-                        Place(lst[i], left, 0, right - left, area.Height);
-                    }
+                Rectangle[] r = Layout(astrMode, lst.Count, area);
+                for (int i = 0; i < lst.Count; i++) {
+                    Place(lst[i], r[i].X, r[i].Y, r[i].Width, r[i].Height);
+                    if (astrMode == CNST_TILE_CASCADE) lst[i].BringToFront();
                 }
             } finally {
                 mfrmHost.ResumeLayout();
             }
+            RaiseLayoutChanged();
+        }
+
+        // Where each of n panes goes in a tiling mode, within aarea (Story 6846: the conversation
+        // panes use the same layout, so the Window menu's tiling applies to them too).
+        public static Rectangle[] Layout(string astrMode, int n, Rectangle aarea) {
+            Rectangle[] r = new Rectangle[Math.Max(n, 0)];
+            if (n == 0) return r;
+            if (astrMode == CNST_TILE_HORIZONTAL) {
+                for (int i = 0; i < n; i++) {
+                    int top = aarea.Height * i / n, bottom = aarea.Height * (i + 1) / n;
+                    r[i] = new Rectangle(aarea.X, aarea.Y + top, aarea.Width, bottom - top);
+                }
+            } else if (astrMode == CNST_TILE_CASCADE) {
+                int w = Math.Max(aarea.Width  - CNST_CASCADE_STEP * (n - 1), aarea.Width  / 2);
+                int h = Math.Max(aarea.Height - CNST_CASCADE_STEP * (n - 1), aarea.Height / 2);
+                for (int i = 0; i < n; i++)
+                    r[i] = new Rectangle(aarea.X + CNST_CASCADE_STEP * i, aarea.Y + CNST_CASCADE_STEP * i, w, h);
+            } else if (astrMode == CNST_TILE_QUAD && n <= 4) {
+                int hw = aarea.Width / 2, hh = aarea.Height / 2;
+                Rectangle[] q = new Rectangle[] {
+                    new Rectangle(0,  0,  hw,               hh),
+                    new Rectangle(hw, 0,  aarea.Width - hw, hh),
+                    new Rectangle(0,  hh, hw,               aarea.Height - hh),
+                    new Rectangle(hw, hh, aarea.Width - hw, aarea.Height - hh) };
+                for (int i = 0; i < n; i++) { q[i].Offset(aarea.X, aarea.Y); r[i] = q[i]; }
+            } else {
+                // Vertical: side-by-side columns. Also quad with more than four panes.
+                for (int i = 0; i < n; i++) {
+                    int left = aarea.Width * i / n, right = aarea.Width * (i + 1) / n;
+                    r[i] = new Rectangle(aarea.X + left, aarea.Y, right - left, aarea.Height);
+                }
+            }
+            return r;
+        }
+
+        // The pane that fills the dock (Maximize Pane), or null while the panes are tiled.
+        public Form MaximizedPane { get { return mfrmMaximized; } }
+
+        // Raised after every tiling, maximize or restore (Story 6846: the conversation panes follow).
+        public event Action LayoutChanged;
+
+        private void RaiseLayoutChanged() {
+            if (LayoutChanged != null) LayoutChanged();
         }
 
         private void FillWith(Form afrmPane) {
             Rectangle area = ClientArea();
-            if (area.Width <= 0 || area.Height <= 0) return;
-            Place(afrmPane, 0, 0, area.Width, area.Height);
-            afrmPane.BringToFront();
-            afrmPane.Activate();
+            if (area.Width > 0 && area.Height > 0) {
+                Place(afrmPane, 0, 0, area.Width, area.Height);
+                afrmPane.BringToFront();
+                afrmPane.Activate();
+            }
+            RaiseLayoutChanged();
         }
 
         private static void Place(Form f, int x, int y, int w, int h) {

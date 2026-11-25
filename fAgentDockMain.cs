@@ -64,6 +64,8 @@ namespace AgentDockStandalone {
             mstrCwd            = astrCwd;
             mPanes = new cPaneArranger(this, this.mnuWindow,
                                        delegate(string s) { this.tslStatus.Text = s; });
+            // Pane looks are kept by place (Story 6846): pane 1 always opens in pane 1's look.
+            cPaneThemes.PlaceOf = PlaceOfTerminal;
             AddComposeBox();
         }
 
@@ -120,9 +122,7 @@ namespace AgentDockStandalone {
             // Docking runs from the back of the z-order to the front: the menu and status bar stay
             // outermost, then the compose box, its bar, and the pane area fills what is left.
             // Conversation panes (Story 6846): fills the pane area in place of the terminals.
-            mGrid = new cConversationGrid(
-                delegate { return mPanes == null ? new List<Form>() : mPanes.OrderedPanes(); },
-                delegate(Form f) { if (mPanes != null) mPanes.SetCurrentPane(f); },
+            mGrid = new cConversationGrid(mPanes,
                 delegate(string s) { this.tslStatus.Text = s; },
                 delegate(cComposeBox card, Control ctl, Point pt) {
                     ContextMenuStrip cms = new ContextMenuStrip();
@@ -204,17 +204,21 @@ namespace AgentDockStandalone {
             ToolStripMenuItem miFor = new ToolStripMenuItem("For " + apane.Text);
             miFor.Enabled = false;
             aItems.Add(miFor);
-            ToolStripMenuItem miDock = new ToolStripMenuItem("Use the Dock's Theme");
-            miDock.ToolTipText = "Drop this pane's own colors and bubbles: it follows Settings -> Compose Box Theme and Bubble Style.";
-            miDock.Checked = strTheme == null && strStyle == null;
-            miDock.Click += delegate { SayThemeSaved(cPaneThemes.Clear(hwnd), apane.Text + " follows the dock's theme again."); };
+            ToolStripMenuItem miDock = new ToolStripMenuItem("Use Global");
+            miDock.ToolTipText = "Drop this pane's own look: its place follows the global colors, bubbles and fonts again.";
+            miDock.Checked = cPaneThemes.FollowsGlobal(hwnd);
+            miDock.Click += delegate { SayThemeSaved(cPaneThemes.Clear(hwnd), apane.Text + " follows the global look again."); };
             aItems.Add(miDock);
+            ToolStripMenuItem miPalette = new ToolStripMenuItem("Palette");
+            miPalette.ToolTipText = "Try looks for this pane with a live preview.";
+            miPalette.Click += delegate { ShowPalette(apane); };
+            aItems.Add(miPalette);
             aItems.Add(new ToolStripSeparator());
 
             ToolStripMenuItem miColors = new ToolStripMenuItem("&Colors");
-            ToolStripMenuItem miColorsDock = new ToolStripMenuItem("The Dock's (" + cDockSettings.ComposeTheme + ")");
+            ToolStripMenuItem miColorsDock = new ToolStripMenuItem("Global (" + cDockSettings.ComposeTheme + ")");
             miColorsDock.Checked = strTheme == null;
-            miColorsDock.Click += delegate { SayThemeSaved(cPaneThemes.SetTheme(hwnd, null), apane.Text + ": the dock's colors."); };
+            miColorsDock.Click += delegate { SayThemeSaved(cPaneThemes.SetTheme(hwnd, null), apane.Text + ": the global colors."); };
             miColors.DropDownItems.Add(miColorsDock);
             miColors.DropDownItems.Add(new ToolStripSeparator());
             foreach (cComposeTheme t in cComposeTheme.All) {
@@ -227,9 +231,9 @@ namespace AgentDockStandalone {
             aItems.Add(miColors);
 
             ToolStripMenuItem miBubbles = new ToolStripMenuItem("&Bubbles");
-            ToolStripMenuItem miBubblesDock = new ToolStripMenuItem("The Dock's (" + cDockSettings.BubbleStyle + ")");
+            ToolStripMenuItem miBubblesDock = new ToolStripMenuItem("Global (" + cDockSettings.BubbleStyle + ")");
             miBubblesDock.Checked = strStyle == null;
-            miBubblesDock.Click += delegate { SayThemeSaved(cPaneThemes.SetStyle(hwnd, null), apane.Text + ": the dock's bubbles."); };
+            miBubblesDock.Click += delegate { SayThemeSaved(cPaneThemes.SetStyle(hwnd, null), apane.Text + ": the global bubbles."); };
             miBubbles.DropDownItems.Add(miBubblesDock);
             miBubbles.DropDownItems.Add(new ToolStripSeparator());
             foreach (cBubbleStyle s in cBubbleStyle.All) {
@@ -241,6 +245,51 @@ namespace AgentDockStandalone {
                 miBubbles.DropDownItems.Add(mi);
             }
             aItems.Add(miBubbles);
+            aItems.Add(FontMenu("&Font", "conversation", cPaneThemes.FontOverride(hwnd), cDockSettings.ConversationFont,
+                delegate(string s) { return cPaneThemes.SetFont(hwnd, s); }, apane.Text));
+            aItems.Add(FontMenu("&Prompt Font", "compose box", cPaneThemes.PromptFontOverride(hwnd), cDockSettings.PromptFont,
+                delegate(string s) { return cPaneThemes.SetPromptFont(hwnd, s); }, apane.Text));
+        }
+
+        // A pane's font submenu: the global font, or one of its own.
+        private ToolStripMenuItem FontMenu(string astrText, string astrWhat, string astrOwn, string astrGlobal,
+                                           Func<string, string> afncSet, string astrPane) {
+            ToolStripMenuItem miFont = new ToolStripMenuItem(astrText);
+            ToolStripMenuItem miGlobal = new ToolStripMenuItem("Global (" + astrGlobal + ")");
+            miGlobal.Checked = astrOwn == null;
+            miGlobal.Click += delegate { SayThemeSaved(afncSet(null), astrPane + ": the global " + astrWhat + " font."); };
+            miFont.DropDownItems.Add(miGlobal);
+            miFont.DropDownItems.Add(new ToolStripSeparator());
+            foreach (cConversationFont f in cConversationFont.All) {
+                string strName = f.Name;
+                ToolStripMenuItem mi = new ToolStripMenuItem(strName);
+                mi.Checked = astrOwn == strName;
+                mi.Click += delegate { SayThemeSaved(afncSet(strName), astrPane + ": " + strName + " " + astrWhat + " font."); };
+                miFont.DropDownItems.Add(mi);
+            }
+            return miFont;
+        }
+
+        // Opens the Palette on the given pane's look (or the current pane's, or the global look).
+        private void ShowPalette(fAgentAbsorbedTerminal apane) {
+            List<fAgentAbsorbedTerminal> lst = new List<fAgentAbsorbedTerminal>();
+            foreach (Form f in mPanes.OrderedPanes()) {
+                fAgentAbsorbedTerminal abs = f as fAgentAbsorbedTerminal;
+                if (abs != null) lst.Add(abs);
+            }
+            if (apane == null) apane = mPanes.CurrentPane() as fAgentAbsorbedTerminal;
+            using (fPalette dlg = new fPalette(lst, apane)) dlg.ShowDialog(this);
+        }
+
+        // The place (1, 2, ...) of the pane holding a terminal window, for cPaneThemes.
+        private int PlaceOfTerminal(IntPtr ahwnd) {
+            if (mPanes == null) return 0;
+            List<Form> lst = mPanes.OrderedPanes();
+            for (int i = 0; i < lst.Count; i++) {
+                fAgentAbsorbedTerminal abs = lst[i] as fAgentAbsorbedTerminal;
+                if (abs != null && abs.AbsorbedHwnd == ahwnd) return i + 1;
+            }
+            return 0;
         }
 
         private void SayThemeSaved(string astrProblem, string astrDone) {
@@ -970,6 +1019,26 @@ namespace AgentDockStandalone {
             mnuConversationPanes.Checked = cDockSettings.ConversationPanes;
             mnuConversationPanes.Click += delegate { ToggleConversationPanes(); };
             mnuSettings.DropDownItems.Add(mnuConversationPanes);
+            // Hide Working Notes (Story 6846, Tony: "I want the option to see or not see the echoed
+            // thoughts at a toggle"): only the agent's last message of each turn shows.
+            ToolStripMenuItem mnuHideNotes = new ToolStripMenuItem("&Hide Working Notes");
+            mnuHideNotes.ToolTipText = "Show only the agent's last message of each turn in the conversation, not the notes it writes while it works. Remembered.";
+            mnuHideNotes.Checked = cDockSettings.HideWorkingNotes;
+            mnuHideNotes.Click += delegate {
+                bool blnOn = !cDockSettings.HideWorkingNotes;
+                string strProblem = null;
+                try { cDockSettings.SaveHideWorkingNotes(blnOn); } catch (Exception ex) { strProblem = ex.Message; }
+                mnuHideNotes.Checked = blnOn;
+                cPaneThemes.RaiseChanged();
+                this.tslStatus.Text = (blnOn ? "Working notes hidden: only each turn's last message shows." : "Working notes shown.")
+                    + (strProblem == null ? "" : " Not remembered: " + strProblem);
+            };
+            mnuSettings.DropDownItems.Add(mnuHideNotes);
+            // The Palette (Story 6846): try colors, bubbles and fonts, then save for all or one pane.
+            ToolStripMenuItem mnuPalette = new ToolStripMenuItem("Pa&lette");
+            mnuPalette.ToolTipText = "Try colors, bubbles and fonts with a live preview, then save them for all panes or one.";
+            mnuPalette.Click += delegate { ShowPalette(null); };
+            mnuSettings.DropDownItems.Add(mnuPalette);
             mnuSettings.DropDownItems.Add(BuildThemeMenu());
             mnuSettings.DropDownItems.Add(BuildBubbleStyleMenu());
             // Pane Theme: the current pane's own look, built fresh each time it opens.
@@ -1040,6 +1109,13 @@ namespace AgentDockStandalone {
                 };
                 mnuTheme.DropDownItems.Add(mi);
             }
+            // The Palette can change the global look too: tick what is current each time it opens.
+            mnuTheme.DropDownOpening += delegate {
+                foreach (ToolStripItem o in mnuTheme.DropDownItems) {
+                    ToolStripMenuItem m = o as ToolStripMenuItem;
+                    if (m != null) m.Checked = m.Text == cDockSettings.ComposeTheme;
+                }
+            };
             return mnuTheme;
         }
 
@@ -1066,6 +1142,12 @@ namespace AgentDockStandalone {
                 };
                 mnuStyle.DropDownItems.Add(mi);
             }
+            mnuStyle.DropDownOpening += delegate {
+                foreach (ToolStripItem o in mnuStyle.DropDownItems) {
+                    ToolStripMenuItem m = o as ToolStripMenuItem;
+                    if (m != null) m.Checked = m.Text == cDockSettings.BubbleStyle;
+                }
+            };
             return mnuStyle;
         }
 

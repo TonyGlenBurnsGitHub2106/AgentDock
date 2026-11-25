@@ -117,6 +117,9 @@ namespace AgentDockStandalone {
             chkFull.Dock       = DockStyle.Fill;
             chkFull.Margin     = new Padding(0);
             chkFull.CheckedChanged += delegate {
+                // Pressed, it offers the way back (Tony: "the button toggle should change to say
+                // 'Dock' and when 'Dock' is clicked, the caption should return to full screen").
+                chkFull.Text = chkFull.Checked ? "Dock" : "Full Screen";
                 if (FullScreenChanged != null) FullScreenChanged(chkFull.Checked);
                 mactStatus(chkFull.Checked
                     ? "Full screen: the panes are hidden and keep running. Press Full Screen again to bring them back."
@@ -410,9 +413,10 @@ namespace AgentDockStandalone {
                         if (mfncTarget() != pane) { RefreshLive(true); return; }   // another pane picked: read that one
                         mfrmLivePane  = pane;
                         mstrLiveStamp = strStamp;
+                        mlstLiveRaw   = lst;
                         if (lst == null) vwLive.SetMessage("No conversation found for " + strPaneName
                             + ". The dock reads Claude Code and GitHub Copilot CLI.");
-                        else vwLive.SetEntries(lst, blnNewPane);
+                        else vwLive.SetEntries(Shown(lst), blnNewPane);
                     }));
                 } catch (Exception) {
                     mblnLiveLoading = false;
@@ -428,6 +432,7 @@ namespace AgentDockStandalone {
             fAgentAbsorbedTerminal pane = mfncTarget();
             if (pane == null || pane == mfrmLivePane || pane == mfrmLiveShowing) return;
             mfrmLiveShowing = pane;
+            mlstLiveRaw     = null;
             vwLive.SetMessage("Reading the conversation of " + pane.Text + "...");
             RefreshLive(true);
         }
@@ -439,6 +444,7 @@ namespace AgentDockStandalone {
             fAgentAbsorbedTerminal pane = mfncTarget();
             string strPane = pane == null ? "Agent Dock" : pane.Text;
             using (fAnswerPopup dlg = new fAnswerPopup(aEntry.IsAnswer ? "Answer" : "Your prompt", strPane, aEntry.Text)) {
+                if (pane != null) dlg.Resend = delegate(string s) { return SendFromPopup(pane, s); };
                 dlg.ShowDialog(this.FindForm());
             }
             txtPrompt.Focus();
@@ -456,13 +462,58 @@ namespace AgentDockStandalone {
             if (this.IsDisposed) return;
             fAgentAbsorbedTerminal pane = mfncTarget();
             IntPtr hwnd = pane == null ? IntPtr.Zero : pane.AbsorbedHwnd;
-            cComposeTheme theme = cPaneThemes.ThemeFor(hwnd);
-            cBubbleStyle  style = cPaneThemes.StyleFor(hwnd);
-            string strKey = theme.Name + "|" + style.Name;
+            cComposeTheme     theme = cPaneThemes.ThemeFor(hwnd);
+            cBubbleStyle      style = cPaneThemes.StyleFor(hwnd);
+            cConversationFont font  = cPaneThemes.FontFor(hwnd);
+            bool blnHideNotes = cDockSettings.HideWorkingNotes;
+            bool blnHideSend  = IsCard && cPaneThemes.HideSendArea(hwnd);
+            if (blnHideSend != mblnSendHidden) ApplySendArea(blnHideSend);
+            if (blnHideNotes != mblnNotesHidden) {
+                mblnNotesHidden = blnHideNotes;
+                if (mlstLiveRaw != null) vwLive.SetEntries(Shown(mlstLiveRaw), false);
+            }
+            if (IsCard) PaintHeader();
+            cConversationFont fontPrompt = cPaneThemes.PromptFontFor(hwnd);
+            string strKey = theme.Name + "|" + style.Name + "|" + font.Name + "|" + fontPrompt.Name;
             if (strKey == mstrThemeKey) return;
             mstrThemeKey = strKey;
             mStyle = style;
+            mFont  = font;
+            // The compose box's own font (Tony: "fonts, for both the prompt/compose pane and the
+            // output panes").
+            Font fntOld = txtPrompt.Font;
+            txtPrompt.Font = fontPrompt.Create();
+            if (fntOld != null && fntOld != txtPrompt.Font) fntOld.Dispose();
             ApplyTheme(theme);
+        }
+
+        private cConversationFont mFont = cConversationFont.Named(cConversationFont.CNST_DEFAULT);
+        private bool mblnNotesHidden;
+        private bool mblnSendHidden;
+        private List<cHistoryEntry> mlstLiveRaw;     // the conversation as read, before filtering
+
+        // What Run conversation shows of the conversation as read: everything after the last
+        // Clear Screen in this pane, and with Hide Working Notes on, only the agent's last message
+        // of each run of messages (the notes it writes while it works come before it).
+        private List<cHistoryEntry> Shown(List<cHistoryEntry> alst) {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            List<cHistoryEntry> lst = cClearMarks.After(pane == null ? IntPtr.Zero : pane.AbsorbedHwnd, alst);
+            if (!mblnNotesHidden) return lst;
+            List<cHistoryEntry> lstOut = new List<cHistoryEntry>();
+            for (int i = 0; i < lst.Count; i++) {
+                bool blnNextIsAnswer = i + 1 < lst.Count && lst[i + 1].IsAnswer;
+                if (lst[i].IsAnswer && blnNextIsAnswer) continue;   // a working note: another answer follows
+                lstOut.Add(lst[i]);
+            }
+            return lstOut;
+        }
+
+        // Hides or shows the Send area at the right of a conversation pane (remembered per place).
+        private void ApplySendArea(bool ablnHide) {
+            mblnSendHidden   = ablnHide;
+            pnlRight.Visible = !ablnHide;
+            splSend.Visible  = !ablnHide;
+            btnSendArea.Text = ablnHide ? "Show Send" : "Hide Send";
         }
 
         // Paints the box in a theme (Story 6845, Settings -> Compose Box Theme). Windows puts
@@ -514,7 +565,7 @@ namespace AgentDockStandalone {
             Color clrBar = blnSys ? SystemColors.ControlDark : aTheme.Border;
             splSend.BackColor   = clrBar;
             splPrompt.BackColor = clrBar;
-            vwLive.ApplyTheme(aTheme, mStyle);
+            vwLive.ApplyTheme(aTheme, mStyle, mFont);
             if (IsCard) PaintHeader();
             cComposeTheme.ThemeScrollBars(txtPrompt, aTheme);
             this.Invalidate(true);
@@ -557,6 +608,7 @@ namespace AgentDockStandalone {
                 return;
             }
             using (fAnswerPopup dlg = new fAnswerPopup(pane.Text, strAnswer)) {
+                dlg.Resend = delegate(string s) { return SendFromPopup(pane, s); };
                 dlg.ShowDialog(this.FindForm());
             }
         }
@@ -583,6 +635,9 @@ namespace AgentDockStandalone {
             string strText = intState < 0 || pane == null ? ""
                 : pane.Text + ": " + (intState == 1 ? "Thinking..." : "Idle");
             string strKey = intState + "|" + strText;
+            // The conversation shows it too, at its bottom (Tony: "when you are 'thinking' I need
+            // to know this, meaning you have not fully responded").
+            vwLive.SetWorking(intState == 1);
             if (strKey == mstrLastState) return;
             mstrLastState = strKey;
             if (AgentStateChanged != null) AgentStateChanged(strText, intState);
@@ -819,12 +874,41 @@ namespace AgentDockStandalone {
             t.Start();
         }
 
+        // Resend from a popup (Story 6846): types the text into the pane and presses Enter there a
+        // moment later, like Send, without touching what is in the box. Null when it went in.
+        private string SendFromPopup(fAgentAbsorbedTerminal apane, string astrText) {
+            if (apane == null || apane.IsDisposed) return "That pane has closed.";
+            IntPtr hwnd = apane.AbsorbedHwnd;
+            string strProblem = cConsoleInput.TypeText(hwnd, astrText.TrimEnd('\r', '\n'));
+            if (strProblem != null) return strProblem;
+            Timer t = new Timer();
+            t.Interval = CNST_ENTER_DELAY_MS;
+            t.Tick += delegate {
+                t.Stop();
+                t.Dispose();
+                string strEnter = cConsoleInput.PressEnter(hwnd);
+                mactStatus(strEnter == null ? "Resent to " + apane.Text + "."
+                    : "The text was typed, but Enter did not reach the pane: " + strEnter);
+            };
+            t.Start();
+            Remember(astrText);
+            return null;
+        }
+
         private void Remember(string astrText) {
             mintHistoryAt = -1;
             mstrDraft     = "";
             if (mlstHistory.Count > 0 && mlstHistory[mlstHistory.Count - 1] == astrText) return;
             mlstHistory.Add(astrText);
             if (mlstHistory.Count > CNST_HISTORY_MAX) mlstHistory.RemoveAt(0);
+        }
+
+        // Raised after Clear Screen, so other boxes showing that pane empty their conversation too.
+        public event Action<fAgentAbsorbedTerminal> ScreenCleared;
+
+        // Another box cleared this pane: show only what comes after the clear.
+        public void PaneCleared(fAgentAbsorbedTerminal apane) {
+            if (mblnLive && mlstLiveRaw != null && mfncTarget() == apane) vwLive.SetEntries(Shown(mlstLiveRaw), true);
         }
 
         // Clear Screen: wipes the screen of the pane in Send to (cConsoleInput.ClearScreen).
@@ -835,6 +919,16 @@ namespace AgentDockStandalone {
                 return;
             }
             string strProblem = cConsoleInput.ClearScreen(pane.AbsorbedHwnd);
+            // The conversation above the text empties too (Tony: "Clear screen is not clearing the
+            // upper screen"): from now on it shows only what is said after this clear.
+            List<cHistoryEntry> lstNow = mblnLive && mfrmLivePane == pane ? mlstLiveRaw : null;
+            if (lstNow == null) {
+                try { lstNow = cAgentHistory.ConversationForPane(pane.AbsorbedHwnd, CNST_CONVERSATION_MAX, false); }
+                catch (Exception) { lstNow = null; }
+            }
+            cClearMarks.Set(pane.AbsorbedHwnd, lstNow);
+            if (mblnLive && mlstLiveRaw != null) vwLive.SetEntries(Shown(mlstLiveRaw), true);
+            if (ScreenCleared != null) ScreenCleared(pane);
             mactStatus(strProblem == null
                 ? "Cleared the screen of " + pane.Text + ". The agent keeps its conversation. Its prompt line comes back when you type or it next writes."
                 : "Not cleared: " + strProblem);
@@ -898,8 +992,30 @@ namespace AgentDockStandalone {
             };
             lblHeader.MouseUp += rightClick;
             pnlHeader.MouseUp += rightClick;
+
+            // Use Global (Tony: "always get back to global themes on a pane at the click of a
+            // button"): this pane's place follows the global look again.
+            HeaderButton(btnGlobal, "Use Global", 76, "Drop this pane's own look: it follows the global theme, bubbles and font again.");
+            btnGlobal.Click += delegate {
+                string strProblem = cPaneThemes.Clear(mfrmPane.AbsorbedHwnd);
+                mactStatus(mfrmPane.Text + " follows the global look again." + (strProblem == null ? "" : " Not remembered: " + strProblem));
+            };
+            // Hide Send / Show Send (Tony: "remembered options to hide the pane to the right for
+            // each terminal"). Enter still sends with the Send area hidden.
+            HeaderButton(btnSendArea, "Hide Send", 74, "Hide or show the Send area at the right of this pane. Enter still sends. Remembered for this pane's place.");
+            btnSendArea.Click += delegate {
+                bool blnHide = !mblnSendHidden;
+                string strProblem = cPaneThemes.SetHideSendArea(mfrmPane.AbsorbedHwnd, blnHide);
+                ApplySendArea(blnHide);
+                mactStatus((blnHide ? "Send area hidden. Enter still sends." : "Send area shown.")
+                    + (strProblem == null ? "" : " Not remembered: " + strProblem));
+                txtPrompt.Focus();
+            };
+
             pnlHeader.Controls.Add(lblHeader);
             pnlHeader.Controls.Add(btnTheme);
+            pnlHeader.Controls.Add(btnGlobal);
+            pnlHeader.Controls.Add(btnSendArea);
             pnlHeader.Controls.Add(lblState);
             this.Controls.Add(pnlHeader);           // docked last of all: across the top
 
@@ -910,6 +1026,19 @@ namespace AgentDockStandalone {
             PaintHeader();
         }
 
+        private readonly Button btnGlobal   = new Button();
+        private readonly Button btnSendArea = new Button();
+
+        private void HeaderButton(Button ab, string astrText, int aintWidth, string astrTip) {
+            ab.Text      = astrText;
+            ab.Dock      = DockStyle.Right;
+            ab.Width     = aintWidth;
+            ab.FlatStyle = FlatStyle.Flat;
+            ab.FlatAppearance.BorderSize = 0;
+            ab.Font      = new Font("Segoe UI", 8.25F);
+            mtipButtons.SetToolTip(ab, astrTip);
+        }
+
         private void PaintHeader() {
             if (!IsCard) return;
             Color clrTab = cPaneColors.ColorOf(mfrmPane.AbsorbedHwnd);
@@ -918,9 +1047,14 @@ namespace AgentDockStandalone {
             Color clrText = dblLight > 150 ? Color.Black : Color.White;
             pnlHeader.BackColor = clrBack;
             lblHeader.ForeColor = clrText;
-            btnTheme.BackColor  = clrBack;
-            btnTheme.ForeColor  = clrText;
-            btnTheme.FlatAppearance.MouseOverBackColor = Blend(clrBack, clrText, 0.2);
+            foreach (Button b in new Button[] { btnTheme, btnGlobal, btnSendArea }) {
+                b.BackColor = clrBack;
+                b.ForeColor = clrText;
+                b.FlatAppearance.MouseOverBackColor = Blend(clrBack, clrText, 0.2);
+            }
+            // Use Global only shows while the pane has a look of its own.
+            bool blnOwn = !cPaneThemes.FollowsGlobal(mfrmPane.AbsorbedHwnd);
+            if (btnGlobal.Visible != blnOwn) btnGlobal.Visible = blnOwn;
             string strTitle = (mintNumber > 0 ? mintNumber + ". " : "") + (mfrmPane.IsDisposed ? "" : mfrmPane.Text);
             if (lblHeader.Text != strTitle) lblHeader.Text = strTitle;
             lblState.Visible   = mintCardState >= 0;

@@ -118,7 +118,7 @@ there instead.
 ### Settings
 - **Show Compose Box**, **Agent Dock Settings...**, **Open Config Folder**, **Update Agent Dock**: see **Settings** above.
 - **Conversation Panes**: see **Conversation panes** below.
-- **Compose Box Theme**, **Bubble Style**, **Pane Theme**: see **The compose box** below.
+- **Hide Working Notes**, **Palette**, **Compose Box Theme**, **Bubble Style**, **Pane Theme**: see **The compose box** below.
 
 ### Help
 - **Usage and Menu Reference** (F1): this help.
@@ -176,35 +176,43 @@ to the end).
   to its height when you pick another choice. While it is on, Up steps through your prompts.
 - **The agent's state** shows at the right of the status bar while the compose box is on: the pane
   in Send to and **Thinking...** (amber) while it works on your prompt, or **Idle** (green) when it
-  is waiting for you. It is checked about once a second. Claude Code only for now: with another
-  agent the space stays empty.
+  is waiting for you. It is checked about once a second. In Run conversation an **Agent is
+  working...** marker also sits under the last message until the agent has finished its answer.
+  Claude Code only for now: with another agent nothing shows.
 - **Full Screen**, under Send, hides the panes and lets the compose box fill the dock, so with Run
-  conversation picked the conversation is all you see. The agents keep running behind it and Send
-  still reaches the pane in Send to (pick another pane there). Press Full Screen again to bring the
-  panes back. Hiding the compose box also brings them back.
+  conversation picked the conversation is all you see. The button then reads **Dock**: press it to
+  bring the panes back, and it reads Full Screen again. The agents keep running behind it and Send
+  still reaches the pane in Send to. Hiding the compose box also brings the panes back.
 - **Clear Screen**, beside Full Screen, wipes the screen and the scrollback of the pane in Send to,
-  the way `cls` does. The agent keeps its whole conversation, so it is safe at any moment, even
-  while the agent works. Its prompt line comes back when you type or it next writes. One limit: Claude
-  Code draws its whole conversation again whenever its terminal changes size, so a re-tile or a
-  resized dock brings the old screen back. Press Clear Screen again then.
-- **Settings -> Compose Box Theme** colors the compose box: Windows (the plain look, the default),
-  Daylight, Dark, Midnight, Nord, Dracula, Solarized Light, Solarized Dark, Forest, Ocean, Sepia,
-  Rose, Lavender, Slate, Amber Terminal, Green Terminal, Sunset and High Contrast. Each theme sets
-  the box, the text, the buttons and lists, and the two kinds of bubble. It changes at once and the
-  dock remembers it.
-- **Settings -> Bubble Style** sets how the conversation's messages are drawn, from plain to
-  fancy: **Plain** (no bubbles, each message a row with a colored bar at its left), **Minimal**
-  (square blocks of color), **Boxed** (square, thin outline), **Classic** (the default: your
-  prompts rounder, the answers squarer, outlined), **Outline** (outlines only), **Soft** (round,
-  no outline), **Chat** (round with a little tail, like a phone), **Shadowed** (rounded, outlined,
-  with a shadow) and **Fancy** (shaded fill, shadow, tail and a bold outline). The colors still
-  come from the theme. It changes at once and the dock remembers it.
-- **The theme and bubble style apply to every pane**, unless a pane has its own. **Settings ->
-  Pane Theme** gives the pane you last clicked its own **Colors**, its own **Bubbles**, or both,
-  and **Use the Dock's Theme** puts it back. What a pane does not override follows the dock, so
-  changing the dock's theme changes every pane except the ones with their own colors. The compose
-  box shows each pane in its own look as you move between panes. A pane keeps its look through an
-  update of the dock, but not once its terminal is closed.
+  the way `cls` does, and empties the conversation shown above the text: from then on Run
+  conversation shows only what is said after the clear. The agent keeps its whole conversation, so
+  it is safe at any moment, even while the agent works. Its prompt line comes back when you type or
+  it next writes. One limit: Claude Code draws its whole conversation again in the terminal whenever
+  the terminal changes size, so a re-tile or a resized dock brings the old terminal screen back.
+  Press Clear Screen again then.
+- **Settings -> Hide Working Notes** (also in the Palette) hides the notes the agent writes while it
+  works ("Looking at the log now", "Building..."): of a run of agent messages, only the last one
+  shows. Untick it to see them all again. It is for every pane, and the dock remembers it.
+- **Messages you type while the agent is working** (Claude Code keeps them apart from ordinary
+  prompts) show in the conversation as your prompts, where the agent received them.
+- **How it looks** is four choices: **Colors** (44 themes, from Windows, the plain look, through
+  light ones like Daylight, Paper, Mint and Sky to dark ones like Dracula, Tokyo Night, Monokai and
+  Synthwave), **Bubbles** (21 styles from plain to fancy: Plain, Notebook, Minimal, Compact, Boxed,
+  Classic, the default, Roomy, Outline, Dashed, Soft, Pill, Accent, Double, Chat, Solid, Card,
+  Shadowed, Glow, Neon, Comic and Fancy), **Font** (the conversation's letters) and **Prompt Font**
+  (the compose box's letters). Colors and bubbles are also on the Settings menu as **Compose Box
+  Theme** and **Bubble Style**.
+- **Settings -> Palette** is where to try them: four lists and a live preview of a short
+  conversation. Step through a list with the arrow keys and the preview changes at once. Pick
+  **Global look** or a pane in **Pane**, then **Save for All Panes** (the global look) or **Save for
+  Pane** (that pane's own). **Use Global** puts the pane back on the global look. Nothing changes
+  until you save.
+- **The global look applies to every pane** unless a pane has its own. A pane's look belongs to its
+  **place** in the dock: pane 1 always opens in pane 1's look, pane 2 in pane 2's, whatever terminal
+  is there, until you press **Use Global** for it. So the panes can always load in different styles.
+  A pane can override any of the four and follow the global look in the rest. **Settings -> Pane
+  Theme** (for the pane you last clicked) has the same choices as menus, plus Use Global and Palette.
+  The compose box shows each pane in its own look as you move between panes.
 
 - **Copy**, beside Popup Answer, copies what is selected in the box, or all of it when nothing is.
 - **The bar above the box** resizes it: drag it up for a taller box and smaller panes, down for the
@@ -233,16 +241,31 @@ administrator can only be reached while the dock itself runs as administrator.
 ## Conversation panes
 
 **Settings -> Conversation Panes** hides every terminal and shows each one as its conversation
-instead: a grid with one conversation pane per terminal, in the dock's pane order. Each has its own
-text box, Send, Popup Answer, Copy and Clear Screen, and sends only to its own terminal. Its header
-shows the pane's number and name on its tab's color, and **Thinking...** or **Idle** at the right.
-The **Theme** button in the header (or a right-click on the header) gives that pane its own colors
-or bubbles, the same menu as **Settings -> Pane Theme**. Writing in a conversation pane makes it the
-pane you last clicked, so **Agents -> Close Active Pane** and the rest act on it.
+instead: one conversation pane per terminal, in the dock's pane order. Each has its own text box,
+Send, Popup Answer, Copy and Clear Screen, and sends only to its own terminal. Its header shows the
+pane's number and name on its tab's color and **Thinking...** or **Idle**, and has three buttons:
+
+- **Theme**: that pane's own colors, bubbles and fonts, Use Global, and the Palette (a right-click
+  on the header opens the same menu).
+- **Use Global**: shows while the pane has a look of its own. One click puts its place back on the
+  global look.
+- **Hide Send / Show Send**: hides the Send area at the right of that pane for more room, and
+  shows it again. Enter still sends. Remembered for that pane's place.
+
+**The Window menu lays them out** as it does the terminals: Tile Vertical, Tile Horizontal,
+Cascade, Quadrant Layout, and Maximize / Restore Pane (the pane you last wrote in fills the dock).
+In Cascade the one you click in comes to the front. Writing in a conversation pane makes it the pane
+you last clicked, so **Agents -> Close Active Pane** and the rest act on it.
 
 The terminals keep running, hidden. A pane opened or closed while conversation panes are on gets or
 loses its conversation pane within a second. The dock's own compose box is hidden meanwhile and comes
 back as it was when you turn conversation panes off. The dock remembers the setting.
+
+## Popups and Resend
+
+**Popup Answer** and a bubble's right-click **Popup** open the message in a window you can edit.
+**Resend** sends the text as it is now, with your changes, to that pane as a new prompt, and the
+window closes. **Copy** copies it, **Close** or Escape closes it.
 
 ---
 

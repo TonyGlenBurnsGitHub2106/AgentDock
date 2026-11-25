@@ -67,11 +67,27 @@ namespace AgentDockStandalone {
             btnCopy.Dock   = DockStyle.Right;
             btnCopy.Click += delegate { CopyAll(); };
 
+            // Resend (Story 6846, Tony: "I need to be able to modify the text and resend as a
+            // prompt, so I need a resend button added to the modal"): the text as it is now, edits
+            // and all, goes to the pane as a new prompt, and the window closes. Shown only when the
+            // window was opened with somewhere to send to (Resend is set).
+            Panel pnlGap2 = new Panel();
+            pnlGap2.Width = 8;
+            pnlGap2.Dock  = DockStyle.Right;
+            btnResend.Text    = "Resend";
+            btnResend.Width   = 90;
+            btnResend.Dock    = DockStyle.Right;
+            btnResend.Visible = false;
+            btnResend.Click  += delegate { ResendText(); };
+            mtip.SetToolTip(btnResend, "Send this text, with your changes, to the pane as a new prompt.");
+
             lblStatus.Dock      = DockStyle.Fill;
             lblStatus.TextAlign = ContentAlignment.MiddleLeft;
             lblStatus.ForeColor = SystemColors.GrayText;
 
             pnlButtons.Controls.Add(lblStatus);
+            pnlButtons.Controls.Add(btnResend);
+            pnlButtons.Controls.Add(pnlGap2);
             pnlButtons.Controls.Add(btnCopy);
             pnlButtons.Controls.Add(pnlGap);
             pnlButtons.Controls.Add(btnClose);
@@ -98,6 +114,27 @@ namespace AgentDockStandalone {
                 return;
             }
             base.OnKeyDown(e);
+        }
+
+        private readonly Button  btnResend = new Button();
+        private readonly ToolTip mtip      = new ToolTip();
+        private Func<string, string> mfncResend;
+
+        // Where Resend sends the text: returns null when it was sent, or why it could not be.
+        // Setting it shows the Resend button.
+        public Func<string, string> Resend {
+            get { return mfncResend; }
+            set { mfncResend = value; btnResend.Visible = value != null; }
+        }
+
+        private void ResendText() {
+            if (mfncResend == null) return;
+            string strText = txtAnswer.Text.Trim();
+            if (strText.Length == 0) { lblStatus.Text = "Nothing to send."; return; }
+            string strProblem = mfncResend(strText);
+            if (strProblem != null) { lblStatus.Text = "Not sent: " + strProblem; return; }
+            mblnEdited = false;
+            this.Close();
         }
 
         private void CopyAll() {

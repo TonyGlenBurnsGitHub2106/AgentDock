@@ -287,6 +287,15 @@ namespace AgentDockStandalone {
                     foreach (string strLine in ReadTailLines(strFile, CNST_TRANSCRIPT_TAIL_BYTES)) {
                         // Tool output is most of a transcript and is never shown, so it is skipped
                         // before the costly parse. Neither are lines with no message at all.
+                        // A prompt typed while the agent is still working is kept as a
+                        // "queued_command" attachment, not a user message (Story 6846, Tony: "when
+                        // I speak while you are talking, the words I said are never making it to
+                        // the output window"). Shown as your prompt, where it reached the agent.
+                        if (!ablnAnswersOnly && strLine.IndexOf("\"queued_command\"", StringComparison.Ordinal) >= 0) {
+                            string strQueued = QueuedPrompt(js, strLine);
+                            if (strQueued != null) { lst.Add(new cHistoryEntry(strQueued, false)); strLastMsgId = null; }
+                            continue;
+                        }
                         if (strLine.IndexOf("\"tool_result\"", StringComparison.Ordinal) >= 0) continue;
                         if (strLine.IndexOf("\"message\"", StringComparison.Ordinal) < 0) continue;
                         Dictionary<string, object> row;
@@ -319,6 +328,21 @@ namespace AgentDockStandalone {
             } catch (Exception) {
                 return null;
             }
+        }
+
+        // The prompt of a "queued_command" attachment line, or null when the line is not one (or
+        // holds no text). Its prompt is a string, or blocks like a message's content.
+        private static string QueuedPrompt(JavaScriptSerializer ajs, string astrLine) {
+            Dictionary<string, object> row;
+            try { row = ajs.DeserializeObject(astrLine) as Dictionary<string, object>; } catch (Exception) { return null; }
+            if (row == null) return null;
+            if (row.ContainsKey("isSidechain") && true.Equals(row["isSidechain"])) return null;
+            Dictionary<string, object> att = row.ContainsKey("attachment") ? row["attachment"] as Dictionary<string, object> : null;
+            if (att == null || !"queued_command".Equals(Str(att, "type")) || !att.ContainsKey("prompt")) return null;
+            Dictionary<string, object> fake = new Dictionary<string, object>();
+            fake["content"] = att["prompt"];
+            string strText = TextBlocks(fake, true);
+            return strText == null || IsHarnessText(strText) ? null : strText;
         }
 
         // The text of a message: its content when that is a string, else its text blocks joined.

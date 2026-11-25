@@ -145,6 +145,60 @@ namespace AgentDockStandalone {
             Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
         }
 
+        // Hide working notes (Story 6846, Tony: "Currently, we are getting working notes and
+        // thoughts. Need toggle to suppress these"): the conversation shows only the agent's last
+        // message of each turn, not the notes it writes along the way. Off by default.
+        public const string KEY_HIDE_WORKING_NOTES = "HideWorkingNotes";
+
+        public static bool HideWorkingNotes {
+            get { return ReadBool(KEY_HIDE_WORKING_NOTES, false); }
+        }
+
+        public static void SaveHideWorkingNotes(bool ablnOn) {
+            mdicValues[KEY_HIDE_WORKING_NOTES] = ablnOn ? "true" : "false";
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
+        }
+
+        // The conversation's font (Story 6846, more theming): a name from cConversationFont.
+        public const string KEY_CONVERSATION_FONT = "ConversationFont";
+
+        public static string ConversationFont {
+            get {
+                string strValue;
+                if (mdicValues.TryGetValue(KEY_CONVERSATION_FONT, out strValue) && strValue.Length > 0)
+                    return cConversationFont.Named(strValue).Name;
+                return cConversationFont.CNST_DEFAULT;
+            }
+        }
+
+        public static void SaveConversationFont(string astrName) {
+            mdicValues[KEY_CONVERSATION_FONT] = cConversationFont.Named(astrName).Name;
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
+        }
+
+        // The compose box's font, where prompts are written (Story 6846, Tony: "fonts, for both
+        // the prompt/compose pane and the output panes"). Consolas 10, the box's font before.
+        public const string KEY_PROMPT_FONT = "PromptFont";
+        public const string CNST_PROMPT_FONT_DEFAULT = "Consolas";
+
+        public static string PromptFont {
+            get {
+                string strValue;
+                if (mdicValues.TryGetValue(KEY_PROMPT_FONT, out strValue) && strValue.Length > 0)
+                    return cConversationFont.Named(strValue).Name;
+                return CNST_PROMPT_FONT_DEFAULT;
+            }
+        }
+
+        // Saves the look of every pane at once (the Palette's Save for All Panes).
+        public static void SaveLook(string astrTheme, string astrStyle, string astrFont, string astrPromptFont) {
+            mdicValues[KEY_PROMPT_FONT] = cConversationFont.Named(astrPromptFont).Name;
+            mdicValues[KEY_COMPOSE_THEME]     = cComposeTheme.Named(astrTheme).Name;
+            mdicValues[KEY_BUBBLE_STYLE]      = cBubbleStyle.Named(astrStyle).Name;
+            mdicValues[KEY_CONVERSATION_FONT] = cConversationFont.Named(astrFont).Name;
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
+        }
+
         public static void SaveComposeTheme(string astrName) {
             mdicValues[KEY_COMPOSE_THEME] = cComposeTheme.Named(astrName).Name;
             Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
@@ -303,7 +357,17 @@ namespace AgentDockStandalone {
                  + "\r\n"
                  + "# true: every terminal hides and is replaced by its conversation with a box to write in.\r\n"
                  + "#   The terminals keep running. Settings -> Conversation Panes switches it.\r\n"
-                 + KEY_CONVERSATION_PANES + " = " + (ConversationPanes ? "true" : "false") + "\r\n";
+                 + KEY_CONVERSATION_PANES + " = " + (ConversationPanes ? "true" : "false") + "\r\n"
+                 + "\r\n"
+                 + "# true: the conversation shows only the agent's last message of each turn, not the\r\n"
+                 + "#   working notes it writes along the way. Settings -> Hide Working Notes.\r\n"
+                 + KEY_HIDE_WORKING_NOTES + " = " + (HideWorkingNotes ? "true" : "false") + "\r\n"
+                 + "\r\n"
+                 + "# The conversation's font. Picked in Settings -> Theme Viewer.\r\n"
+                 + KEY_CONVERSATION_FONT + " = " + ConversationFont + "\r\n"
+                 + "\r\n"
+                 + "# The compose box font, where prompts are written. Picked in Settings -> Palette.\r\n"
+                 + KEY_PROMPT_FONT + " = " + PromptFont + "\r\n";
         }
     }
 }

@@ -68,13 +68,18 @@
     <Compile Include="fAnswerPopup.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="fPalette.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="cAgentHistory.cs" />
     <Compile Include="cCopilotHistory.cs" />
     <Compile Include="cHistoryEntry.cs" />
     <Compile Include="cConsoleInput.cs" />
     <Compile Include="cComposeBox.cs" />
     <Compile Include="cBubbleStyle.cs" />
+    <Compile Include="cClearMarks.cs" />
     <Compile Include="cComposeTheme.cs" />
+    <Compile Include="cConversationFont.cs" />
     <Compile Include="cConversationGrid.cs" />
     <Compile Include="cPaneThemes.cs" />
     <Compile Include="cConversationView.cs" />

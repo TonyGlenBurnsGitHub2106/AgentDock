@@ -16,10 +16,6 @@ namespace AgentDockStandalone {
     internal sealed class cConversationView : Panel {
 
         private const int CNST_MARGIN        = 10;   // from the sides of the view
-        private const int CNST_PAD           = 9;    // inside a bubble, around the text
-        private const int CNST_GAP           = 10;   // between one bubble and the next caption
-        private const int CNST_PROMPT_RADIUS = 14;
-        private const int CNST_ANSWER_RADIUS = 4;
         private const int CNST_SHOW_LINES    = 14;   // a longer one is cut short in its bubble
         private const int CNST_SHOW_CHARS    = 1500;
         private const string CNST_MORE       = "\r\n... right-click, Popup, to read all of it";
@@ -57,19 +53,53 @@ namespace AgentDockStandalone {
         // The colors and the bubble style (Story 6846). A new style can change every bubble's
         // size (Plain is full width, a tail takes room), so the view is laid out again.
         public void ApplyTheme(cComposeTheme aTheme, cBubbleStyle aStyle) {
+            ApplyTheme(aTheme, aStyle, mFont);
+        }
+
+        // The colors, the bubble style and the font (Story 6846). A new style or font can change
+        // every bubble's size, so the view is laid out again.
+        public void ApplyTheme(cComposeTheme aTheme, cBubbleStyle aStyle, cConversationFont aFont) {
             mTheme = aTheme;
-            bool blnNewStyle = aStyle != mStyle;
+            bool blnNewLayout = aStyle != mStyle || (aFont != null && aFont != mFont);
             mStyle = aStyle ?? cBubbleStyle.Named(cBubbleStyle.CNST_DEFAULT);
+            if (aFont != null && aFont != mFont) {
+                mFont = aFont;
+                Font fntOld = this.Font;
+                this.Font = aFont.Create();
+                if (fntOld != null && fntOld != this.Font) fntOld.Dispose();
+            }
             this.BackColor = aTheme.IsSystem ? SystemColors.Window : aTheme.InputBack;
             cComposeTheme.ThemeScrollBars(this, aTheme);
-            if (blnNewStyle) Relayout();
+            if (blnNewLayout) Relayout();
             Invalidate();
         }
+
+        private cConversationFont mFont = cConversationFont.Named(cConversationFont.CNST_DEFAULT);
+        private const int CNST_BAND   = 4;     // Card: room under the band's text
+        private const int CNST_ACCENT = 6;     // Accent: the bar's width
 
         private cBubbleStyle mStyle = cBubbleStyle.Named(cBubbleStyle.CNST_DEFAULT);
         private const int CNST_TAIL   = 8;     // how far a tail sticks out from its bubble
         private const int CNST_BAR    = 4;     // Plain: the bar at the left of each row
         private const int CNST_SHADOW = 3;     // how far a shadow falls
+
+        // Working (Story 6846): while the agent has not finished its answer, a marker sits at the
+        // bottom of the conversation, "Agent is working...", with dots that move.
+        private bool  mblnWorking;
+        private int   mintDots;
+        private readonly Timer mtmrDots = new Timer();
+        private const int CNST_WORKING_H = 30;
+
+        public void SetWorking(bool ablnWorking) {
+            if (ablnWorking == mblnWorking) return;
+            mblnWorking = ablnWorking;
+            if (mtmrDots.Interval != 450) {
+                mtmrDots.Interval = 450;
+                mtmrDots.Tick += delegate { mintDots = (mintDots + 1) % 4; Invalidate(); };
+            }
+            if (ablnWorking) mtmrDots.Start(); else mtmrDots.Stop();
+            Relayout();
+        }
 
         // A line shown in the middle when there is nothing to show ("Pick a pane ...").
         public void SetMessage(string astrMessage) {
@@ -149,13 +179,12 @@ namespace AgentDockStandalone {
             mHover = null;
             int intWidth = Math.Max(120, this.ClientSize.Width);
             mintLaidOutWidth = this.ClientSize.Width;
-            // Plain rows run the full width. A tail takes room at the speaker's side.
-            bool blnFlat = mStyle.Flat;
-            int intSide  = CNST_MARGIN + (mStyle.Tail ? CNST_TAIL : 0);
-            int intMaxBubble = blnFlat ? Math.Max(80, intWidth - 2 * CNST_MARGIN)
+            // Plain and Notebook rows run the full width. A tail takes room at the speaker's side.
+            bool blnFull = mStyle.Flat || mStyle.Underline;
+            int intSide  = CNST_MARGIN + (mStyle.Tail ? CNST_TAIL : 0) + (mStyle.Glow ? 3 : 0);
+            int intMaxBubble = blnFull ? Math.Max(80, intWidth - 2 * CNST_MARGIN)
                                        : Math.Max(80, (int)(intWidth * 0.82) - intSide);
-            int intLeftPad = blnFlat ? CNST_PAD + CNST_BAR : CNST_PAD;   // Plain: room for the bar
-            int intGap = CNST_GAP + (mStyle.Shadow ? CNST_SHADOW : 0);
+            int intGap = mStyle.Gap + (mStyle.Shadow ? CNST_SHADOW : 0) + (mStyle.HardShadow ? 4 : 0);
             int intCaptionH  = mfntCaption.Height;
             int y = CNST_MARGIN;
             TextFormatFlags flags = TextFlags();
@@ -166,22 +195,38 @@ namespace AgentDockStandalone {
                 b.ShowCaption = prev == null || prev.IsAnswer != entry.IsAnswer;
                 prev = entry;
                 b.Shown = Shorten(entry.Text);
+                Padding pad = Insets(entry.IsAnswer);
                 Size szText = TextRenderer.MeasureText(b.Shown, this.Font,
-                    new Size(intMaxBubble - intLeftPad - CNST_PAD, Int32.MaxValue), flags);
-                int w = blnFlat ? intMaxBubble : Math.Max(60, Math.Min(intMaxBubble, szText.Width + intLeftPad + CNST_PAD));
-                int h = szText.Height + 2 * CNST_PAD;
-                int x = blnFlat || entry.IsAnswer ? intSide : intWidth - intSide - w;
-                if (blnFlat) x = CNST_MARGIN;
-                b.CaptionAt = new Point(blnFlat ? x + intLeftPad : (entry.IsAnswer ? x + 4 : x + w - 4), y);
-                if (b.ShowCaption) y += intCaptionH + 2;
-                else y -= intGap / 2;               // the same speaker again: closer together
+                    new Size(Math.Max(20, intMaxBubble - pad.Horizontal), Int32.MaxValue), flags);
+                int w = blnFull ? intMaxBubble : Math.Max(60, Math.Min(intMaxBubble, szText.Width + pad.Horizontal));
+                if (mStyle.HeaderBand) w = Math.Max(w, TextRenderer.MeasureText("Agent", mfntCaption).Width + 2 * mStyle.Pad + 8);
+                int h = szText.Height + pad.Vertical;
+                int x = blnFull ? CNST_MARGIN : (entry.IsAnswer ? intSide : intWidth - intSide - w);
+                b.CaptionAt = new Point(blnFull ? x + (mStyle.Flat ? mStyle.Pad + CNST_BAR : 0) : (entry.IsAnswer ? x + 4 : x + w - 4), y);
+                // Card puts the speaker in its band, so nothing goes above the bubble.
+                if (b.ShowCaption && !mStyle.HeaderBand) y += intCaptionH + 2;
+                else if (!mStyle.HeaderBand) y -= intGap / 2;       // the same speaker again: closer together
                 b.Box = new Rectangle(x, y, w, h);
                 y += h + intGap;
                 mlstBubbles.Add(b);
             }
-            this.AutoScrollMinSize = new Size(0, mlstBubbles.Count == 0 ? 0 : y);
+            mintContentEnd = y;
+            this.AutoScrollMinSize = new Size(0, mlstBubbles.Count == 0 ? 0 : y + (mblnWorking ? CNST_WORKING_H : 0));
             if (mblnPinned) ScrollToBottom();
             Invalidate();
+        }
+
+        // The room between a bubble's edge and its text, for the current style.
+        private Padding Insets(bool ablnAnswer) {
+            int p = mStyle.Pad;
+            Padding pad = new Padding(p, p, p, p);
+            if (mStyle.Flat) pad.Left += CNST_BAR;
+            if (mStyle.Accent) { if (ablnAnswer) pad.Left += CNST_ACCENT; else pad.Right += CNST_ACCENT; }
+            if (mStyle.HeaderBand) pad.Top += mfntCaption.Height + CNST_BAND;
+            if (mStyle.Underline) { pad.Left = 2; pad.Right = 2; }
+            // A pill's round ends would cut into the text.
+            if (mStyle.PromptRadius >= 99) { pad.Left += 6; pad.Right += 6; }
+            return pad;
         }
 
         private static TextFormatFlags TextFlags() {
@@ -224,11 +269,12 @@ namespace AgentDockStandalone {
                 Color clrText = blnAnswer ? mTheme.AnswerText : mTheme.PromptText;
                 int intRadius = blnAnswer ? mStyle.AnswerRadius : mStyle.PromptRadius;
                 bool blnHover = b == mHover;
+                string strCaption = blnAnswer ? "Agent" : "You";
 
-                if (b.ShowCaption) {
-                    string strCaption = blnAnswer ? "Agent" : "You";
+                if (b.ShowCaption && !mStyle.HeaderBand) {
                     Size szCap = TextRenderer.MeasureText(strCaption, mfntCaption);
-                    int xCap = blnAnswer || mStyle.Flat ? b.CaptionAt.X : b.CaptionAt.X - szCap.Width;
+                    bool blnLeft = blnAnswer || mStyle.Flat || mStyle.Underline;
+                    int xCap = blnLeft ? b.CaptionAt.X : b.CaptionAt.X - szCap.Width;
                     TextRenderer.DrawText(g, strCaption, mfntCaption, new Point(xCap, b.CaptionAt.Y + intDy), mTheme.Caption);
                 }
 
@@ -237,15 +283,46 @@ namespace AgentDockStandalone {
                     // band behind the row only while the mouse is over it.
                     if (blnHover) using (SolidBrush brHover = new SolidBrush(Color.FromArgb(28, clrEdge))) g.FillRectangle(brHover, rc);
                     using (SolidBrush brBar = new SolidBrush(clrEdge)) g.FillRectangle(brBar, rc.X, rc.Y, CNST_BAR, rc.Height);
-                    clrText = this.ForeColorFor();
+                    clrText = ForeColorFor();
+                } else if (mStyle.Underline) {
+                    // Notebook: a rule under each message in the speaker's color.
+                    if (blnHover) using (SolidBrush brHover = new SolidBrush(Color.FromArgb(24, clrEdge))) g.FillRectangle(brHover, rc);
+                    using (Pen pen = new Pen(clrEdge, blnHover ? 2.5F : 1.25F)) g.DrawLine(pen, rc.X, rc.Bottom - 1, rc.Right, rc.Bottom - 1);
+                    clrText = ForeColorFor();
                 } else {
-                    PaintBubble(g, rc, intRadius, blnAnswer, clrFill, clrEdge, blnHover);
-                    if (!mStyle.Fill) clrText = this.ForeColorFor();
+                    PaintBubble(g, rc, intRadius, blnAnswer, clrFill, clrEdge, blnHover, strCaption);
+                    if (mStyle.Solid) clrText = Contrast(clrEdge);
+                    else if (!mStyle.Fill) clrText = ForeColorFor();
                 }
-                Rectangle rcText = new Rectangle(rc.X + (mStyle.Flat ? CNST_PAD + CNST_BAR : CNST_PAD), rc.Y + CNST_PAD,
-                    rc.Width - (mStyle.Flat ? 2 * CNST_PAD + CNST_BAR : 2 * CNST_PAD), rc.Height - 2 * CNST_PAD);
+                Padding pad = Insets(blnAnswer);
+                Rectangle rcText = new Rectangle(rc.X + pad.Left, rc.Y + pad.Top,
+                    Math.Max(1, rc.Width - pad.Horizontal), Math.Max(1, rc.Height - pad.Vertical));
                 TextRenderer.DrawText(g, b.Shown, this.Font, rcText, clrText, TextFlags());
             }
+            if (mblnWorking) PaintWorking(g, mintContentEnd + intDy);
+        }
+
+        private int mintContentEnd;
+
+        // "Agent is working" in a small pill at the left, under the last message.
+        private void PaintWorking(Graphics g, int y) {
+            string strText = "Agent is working" + new string('.', mintDots);
+            Size sz = TextRenderer.MeasureText("Agent is working...", mfntCaption);
+            Rectangle rc = new Rectangle(CNST_MARGIN, y - 4, sz.Width + 18, sz.Height + 8);
+            Color clrEdge = mTheme.AnswerEdge;
+            using (GraphicsPath path = Rounded(rc, rc.Height / 2))
+            using (SolidBrush br = new SolidBrush(Color.FromArgb(40, clrEdge)))
+            using (Pen pen = new Pen(clrEdge, 1F)) {
+                g.FillPath(br, path);
+                g.DrawPath(pen, path);
+            }
+            TextRenderer.DrawText(g, strText, mfntCaption, new Rectangle(rc.X + 9, rc.Y, rc.Width - 9, rc.Height),
+                ForeColorFor(), TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix);
+        }
+
+        // Black or white, whichever reads better on aclr.
+        private static Color Contrast(Color aclr) {
+            return 0.299 * aclr.R + 0.587 * aclr.G + 0.114 * aclr.B > 150 ? Color.Black : Color.White;
         }
 
         // Text with no bubble color behind it (Plain, Outline) reads in the view's own text color.
@@ -253,10 +330,26 @@ namespace AgentDockStandalone {
             return mTheme.IsSystem ? SystemColors.WindowText : mTheme.InputFore;
         }
 
-        // One bubble in the current style: shadow, fill (plain or shaded), tail and outline.
+        // One bubble in the current style: glow and shadows, fill (plain, shaded or solid), the
+        // accent bar or header band, then the outline (dashed, ink or double).
         private void PaintBubble(Graphics g, Rectangle rc, int aintRadius, bool ablnAnswer,
-                                 Color aclrFill, Color aclrEdge, bool ablnHover) {
+                                 Color aclrFill, Color aclrEdge, bool ablnHover, string astrCaption) {
             using (GraphicsPath path = BubblePath(rc, aintRadius, ablnAnswer)) {
+                if (mStyle.Glow) {
+                    // Wide, faint strokes of the outline color, widest first.
+                    for (int i = 4; i >= 1; i--)
+                        using (Pen penGlow = new Pen(Color.FromArgb(mTheme.IsDark ? 34 : 24, aclrEdge), i * 3F))
+                        { penGlow.LineJoin = LineJoin.Round; g.DrawPath(penGlow, path); }
+                }
+                if (mStyle.HardShadow) {
+                    using (GraphicsPath hard = (GraphicsPath)path.Clone())
+                    using (Matrix m = new Matrix()) {
+                        m.Translate(4F, 4F);
+                        hard.Transform(m);
+                        using (SolidBrush brHard = new SolidBrush(mTheme.IsDark ? Color.FromArgb(150, 0, 0, 0) : Color.FromArgb(200, 40, 40, 40)))
+                            g.FillPath(brHard, hard);
+                    }
+                }
                 if (mStyle.Shadow) {
                     using (Matrix m = new Matrix()) {
                         // Two soft layers, the farther one fainter.
@@ -271,7 +364,9 @@ namespace AgentDockStandalone {
                         }
                     }
                 }
-                if (mStyle.Fill) {
+                if (mStyle.Solid) {
+                    using (SolidBrush br = new SolidBrush(aclrEdge)) g.FillPath(br, path);
+                } else if (mStyle.Fill) {
                     if (mStyle.Gradient) {
                         Rectangle rcGrad = new Rectangle(rc.X, rc.Y - 1, rc.Width, rc.Height + 2);
                         using (LinearGradientBrush brGrad = new LinearGradientBrush(rcGrad,
@@ -281,9 +376,39 @@ namespace AgentDockStandalone {
                         using (SolidBrush br = new SolidBrush(aclrFill)) g.FillPath(br, path);
                     }
                 }
+                if (mStyle.Accent || mStyle.HeaderBand) {
+                    Region rgnOld = g.Clip;
+                    g.SetClip(path, CombineMode.Intersect);
+                    using (SolidBrush brEdge = new SolidBrush(aclrEdge)) {
+                        if (mStyle.Accent)
+                            g.FillRectangle(brEdge, ablnAnswer ? rc.X : rc.Right - CNST_ACCENT, rc.Y, CNST_ACCENT, rc.Height);
+                        if (mStyle.HeaderBand) {
+                            int intBand = mfntCaption.Height + CNST_BAND;
+                            g.FillRectangle(brEdge, rc.X, rc.Y, rc.Width, intBand);
+                            TextRenderer.DrawText(g, astrCaption, mfntCaption,
+                                new Rectangle(rc.X + mStyle.Pad, rc.Y, rc.Width - 2 * mStyle.Pad, intBand), Contrast(aclrEdge),
+                                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix);
+                        }
+                    }
+                    g.Clip = rgnOld;
+                }
                 float fltEdge = mStyle.EdgeWidth;
                 if (ablnHover) fltEdge = Math.Max(2.5F, fltEdge + 1F);   // the bubble under the mouse stands out
-                if (fltEdge > 0) using (Pen pen = new Pen(aclrEdge, fltEdge)) g.DrawPath(pen, path);
+                if (fltEdge > 0) {
+                    Color clrPen = mStyle.InkEdge ? (mTheme.IsDark ? Color.FromArgb(235, 235, 235) : Color.FromArgb(25, 25, 25)) : aclrEdge;
+                    using (Pen pen = new Pen(clrPen, fltEdge)) {
+                        if (mStyle.Dashed) pen.DashStyle = DashStyle.Dash;
+                        g.DrawPath(pen, path);
+                    }
+                    if (mStyle.DoubleEdge) {
+                        Rectangle rcIn = Rectangle.Inflate(rc, -4, -4);
+                        using (GraphicsPath inner = Rounded(rcIn, Math.Max(1, aintRadius - 3)))
+                        using (Pen pen2 = new Pen(clrPen, Math.Max(1F, fltEdge - 0.5F)))
+                            g.DrawPath(pen2, inner);
+                    }
+                } else if (ablnHover) {
+                    using (Pen pen = new Pen(aclrEdge, 2F)) g.DrawPath(pen, path);
+                }
             }
         }
 
