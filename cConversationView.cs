@@ -103,8 +103,28 @@ namespace AgentDockStandalone {
 
         // A line shown in the middle when there is nothing to show ("Pick a pane ...").
         public void SetMessage(string astrMessage) {
+            mastrScreen = null;
             mstrMessage = astrMessage ?? "";
             if (mlstEntries.Count > 0) { mlstEntries = new List<cHistoryEntry>(); mblnPinned = true; Relayout(); }
+            Invalidate();
+        }
+
+        // The pane's own screen under a caption, while it has no conversation to show (Story 6852:
+        // a new pane's card said only "No conversation yet" while the terminal behind it, hidden
+        // in conversation mode, was starting or asking a question). Blank lines at the end are
+        // dropped. Redrawn only when the text changes.
+        private string[] mastrScreen;
+        private readonly Font mfntScreen = new Font("Consolas", 9F);
+
+        public void SetScreen(string astrCaption, string[] aastrLines) {
+            List<string> lst = new List<string>(aastrLines ?? new string[0]);
+            while (lst.Count > 0 && lst[lst.Count - 1].Trim().Length == 0) lst.RemoveAt(lst.Count - 1);
+            while (lst.Count > 0 && lst[0].Trim().Length == 0) lst.RemoveAt(0);
+            string[] a = lst.ToArray();
+            if (mlstEntries.Count > 0) { mlstEntries = new List<cHistoryEntry>(); mblnPinned = true; Relayout(); }
+            if (mastrScreen != null && mstrMessage == (astrCaption ?? "") && String.Join("|", mastrScreen) == String.Join("|", a)) return;
+            mstrMessage = astrCaption ?? "";
+            mastrScreen = a;
             Invalidate();
         }
 
@@ -117,6 +137,7 @@ namespace AgentDockStandalone {
             if (ablnToBottom) mblnPinned = true;
             if (!ablnToBottom && SameAs(lst)) return;
             mlstEntries = lst;
+            mastrScreen = null;
             mstrMessage = lst.Count == 0 ? "No conversation yet." : "";
             Relayout();
         }
@@ -252,6 +273,19 @@ namespace AgentDockStandalone {
             base.OnPaint(e);
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            if (mlstBubbles.Count == 0 && mastrScreen != null) {
+                Rectangle rcCap = new Rectangle(12, 10, Math.Max(10, this.ClientSize.Width - 24), this.Font.Height * 2 + 4);
+                TextRenderer.DrawText(g, mstrMessage, this.Font, rcCap, mTheme.Caption,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                int y = rcCap.Bottom + 6;
+                Color clrText = Color.FromArgb(mTheme.Caption.A, mTheme.Caption);
+                foreach (string strLine in mastrScreen) {
+                    if (y > this.ClientSize.Height) break;
+                    TextRenderer.DrawText(g, strLine, mfntScreen, new Point(12, y), clrText, TextFormatFlags.NoPrefix);
+                    y += mfntScreen.Height;
+                }
+                return;
+            }
             if (mlstBubbles.Count == 0) {
                 TextRenderer.DrawText(g, mstrMessage, this.Font, this.ClientRectangle, mTheme.Caption,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);

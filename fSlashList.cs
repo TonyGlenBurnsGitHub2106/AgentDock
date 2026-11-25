@@ -5,14 +5,18 @@ using System.Windows.Forms;
 
 namespace AgentDockStandalone {
 
-    // The pick list of slash commands over a compose box (Story 6851). It never takes the
-    // keyboard: the box keeps it, and steers the list with Up, Down, Tab, Enter and Escape. A
-    // click on a row picks it. Each row is the command and what it does.
+    // The pick list of slash commands over a compose box (Story 6851). It shows what the pane's
+    // agent shows under its own input line (cSlashScreen): its rows, the one it has picked, its
+    // "N more", and, once a command is typed, what the command takes (its argument hint). It
+    // never takes the keyboard: the box keeps it and steers the agent with Up, Down, Tab, Enter
+    // and Escape. A click on a row picks it.
     internal sealed class fSlashList : Form {
 
-        private const int CNST_ROWS_MAX = 10;
+        private const int CNST_ROWS_MAX = 12;
         private readonly ListBox lst = new ListBox();
-        private List<cSlashCommand> mlstShown = new List<cSlashCommand>();
+        private List<cSlashCommand> mlstRows = new List<cSlashCommand>();
+        private string mstrHint = "";
+        private string mstrMore = "";
         private Font mfntName;
 
         public event Action<cSlashCommand> Picked;
@@ -23,17 +27,17 @@ namespace AgentDockStandalone {
             this.StartPosition   = FormStartPosition.Manual;
             this.BackColor       = SystemColors.ControlDark;   // the 1 px edge
             this.Padding         = new Padding(1);
-            lst.Dock          = DockStyle.Fill;
-            lst.BorderStyle   = BorderStyle.None;
-            lst.DrawMode      = DrawMode.OwnerDrawFixed;
+            lst.Dock           = DockStyle.Fill;
+            lst.BorderStyle    = BorderStyle.None;
+            lst.DrawMode       = DrawMode.OwnerDrawFixed;
             lst.IntegralHeight = false;
-            lst.Font          = new Font("Segoe UI", 9.5F);
-            mfntName          = new Font(lst.Font, FontStyle.Bold);
-            lst.ItemHeight    = lst.Font.Height + 6;
-            lst.DrawItem     += new DrawItemEventHandler(List_DrawItem);
-            lst.MouseClick   += delegate(object s, MouseEventArgs e) {
-                int i = lst.IndexFromPoint(e.Location);
-                if (i >= 0 && i < mlstShown.Count && Picked != null) Picked(mlstShown[i]);
+            lst.Font           = new Font("Segoe UI", 9.5F);
+            mfntName           = new Font(lst.Font, FontStyle.Bold);
+            lst.ItemHeight     = lst.Font.Height + 6;
+            lst.DrawItem      += new DrawItemEventHandler(List_DrawItem);
+            lst.MouseClick    += delegate(object s, MouseEventArgs e) {
+                cSlashCommand c = RowAt(lst.IndexFromPoint(e.Location));
+                if (c != null && Picked != null) Picked(c);
             };
             this.Controls.Add(lst);
         }
@@ -49,28 +53,38 @@ namespace AgentDockStandalone {
             }
         }
 
-        public cSlashCommand Selected {
-            get { return lst.SelectedIndex >= 0 && lst.SelectedIndex < mlstShown.Count ? mlstShown[lst.SelectedIndex] : null; }
+        // Items in the list: the hint first (when there is one), the rows, then "N more".
+        private int RowOffset { get { return mstrHint.Length > 0 ? 1 : 0; } }
+
+        private cSlashCommand RowAt(int aintItem) {
+            int i = aintItem - RowOffset;
+            return i >= 0 && i < mlstRows.Count ? mlstRows[i] : null;
         }
 
-        public int Count { get { return mlstShown.Count; } }
+        public cSlashCommand Selected { get { return RowAt(lst.SelectedIndex); } }
 
-        // Fills the list and places it just above arcAnchor (screen), as wide as it, or below
-        // it when there is no room above. Colors follow the box.
-        public void ShowFor(List<cSlashCommand> alst, Rectangle arcAnchor, Color aclrBack, Color aclrText, Form afrmOwner) {
-            string strWas = (!this.Visible || Selected == null) ? null : Selected.Name;   // a fresh list starts at the top
-            mlstShown = alst;
+        public int RowCount { get { return mlstRows.Count; } }
+
+        // Shows the rows with row aintSelected picked (-1: none), the agent's "N more" and the
+        // argument hint, just above arcAnchor (screen), as wide as it, or below it when there is
+        // no room above. Colors follow the box.
+        public void ShowFor(List<cSlashCommand> arows, int aintSelected, string astrMore, string astrHint,
+                            Rectangle arcAnchor, Color aclrBack, Color aclrText, Form afrmOwner) {
+            mlstRows = arows ?? new List<cSlashCommand>();
+            mstrHint = astrHint ?? "";
+            mstrMore = astrMore ?? "";
             lst.BeginUpdate();
             lst.Items.Clear();
-            foreach (cSlashCommand c in alst) lst.Items.Add(c.Name);
+            if (mstrHint.Length > 0) lst.Items.Add("hint");
+            foreach (cSlashCommand c in mlstRows) lst.Items.Add(c.Name);
+            if (mstrMore.Length > 0) lst.Items.Add("more");
             lst.EndUpdate();
-            int intAt = 0;
-            if (strWas != null) for (int i = 0; i < alst.Count; i++) if (alst[i].Name == strWas) { intAt = i; break; }
-            if (alst.Count > 0) lst.SelectedIndex = intAt;
+            if (aintSelected >= 0 && aintSelected < mlstRows.Count) lst.SelectedIndex = aintSelected + RowOffset;
+            else lst.SelectedIndex = -1;
             lst.BackColor = aclrBack;
             lst.ForeColor = aclrText;
 
-            int intRows = Math.Max(1, Math.Min(CNST_ROWS_MAX, alst.Count));
+            int intRows = Math.Max(1, Math.Min(CNST_ROWS_MAX, lst.Items.Count));
             int intH = intRows * lst.ItemHeight + 2;
             int intW = Math.Max(420, arcAnchor.Width);
             Rectangle rcScreen = Screen.FromRectangle(arcAnchor).WorkingArea;
@@ -82,32 +96,43 @@ namespace AgentDockStandalone {
                 if (afrmOwner != null && this.Owner != afrmOwner) this.Owner = afrmOwner;
                 this.Show();
             }
+            lst.Invalidate();
         }
 
+        // Moves the pick within the rows (used when the list is the dock's own, not the agent's).
         public void Step(int aintBy) {
-            if (mlstShown.Count == 0) return;
-            int i = lst.SelectedIndex + aintBy;
-            lst.SelectedIndex = Math.Max(0, Math.Min(mlstShown.Count - 1, i));
+            if (mlstRows.Count == 0) return;
+            int i = (lst.SelectedIndex < RowOffset ? -1 : lst.SelectedIndex - RowOffset) + aintBy;
+            lst.SelectedIndex = Math.Max(0, Math.Min(mlstRows.Count - 1, i)) + RowOffset;
         }
 
         private void List_DrawItem(object sender, DrawItemEventArgs e) {
-            if (e.Index < 0 || e.Index >= mlstShown.Count) return;
-            cSlashCommand c = mlstShown[e.Index];
+            if (e.Index < 0 || e.Index >= lst.Items.Count) return;
+            Color clrDimBase = Blend(lst.ForeColor, lst.BackColor, 0.45);
+            using (SolidBrush b = new SolidBrush(lst.BackColor)) e.Graphics.FillRectangle(b, e.Bounds);
+            Rectangle rcAll = new Rectangle(e.Bounds.Left + 6, e.Bounds.Top, e.Bounds.Width - 12, e.Bounds.Height);
+            TextFormatFlags fl = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+            if (mstrHint.Length > 0 && e.Index == 0) {
+                TextRenderer.DrawText(e.Graphics, mstrHint, lst.Font, rcAll, clrDimBase, fl);
+                return;
+            }
+            cSlashCommand c = RowAt(e.Index);
+            if (c == null) {
+                TextRenderer.DrawText(e.Graphics, "    " + mstrMore, lst.Font, rcAll, clrDimBase, fl);
+                return;
+            }
             bool blnSel = (e.State & DrawItemState.Selected) != 0;
-            Color clrBack = blnSel ? SystemColors.Highlight : lst.BackColor;
+            if (blnSel) using (SolidBrush b = new SolidBrush(SystemColors.Highlight)) e.Graphics.FillRectangle(b, e.Bounds);
             Color clrText = blnSel ? SystemColors.HighlightText : lst.ForeColor;
-            Color clrDim  = blnSel ? SystemColors.HighlightText : Blend(lst.ForeColor, lst.BackColor, 0.45);
-            using (SolidBrush b = new SolidBrush(clrBack)) e.Graphics.FillRectangle(b, e.Bounds);
+            Color clrDim  = blnSel ? SystemColors.HighlightText : clrDimBase;
             string strName = "/" + c.Name;
             Size szName = TextRenderer.MeasureText(e.Graphics, strName, mfntName);
             int intNameW = Math.Min(Math.Max(szName.Width, 150), e.Bounds.Width / 2);
             Rectangle rcName = new Rectangle(e.Bounds.Left + 6, e.Bounds.Top, intNameW, e.Bounds.Height);
-            TextRenderer.DrawText(e.Graphics, strName, mfntName, rcName, clrText,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(e.Graphics, strName, mfntName, rcName, clrText, fl);
             string strDesc = c.ArgumentHint.Length > 0 ? c.ArgumentHint + "   " + c.Description : c.Description;
             Rectangle rcDesc = new Rectangle(rcName.Right + 12, e.Bounds.Top, e.Bounds.Right - rcName.Right - 18, e.Bounds.Height);
-            TextRenderer.DrawText(e.Graphics, strDesc, lst.Font, rcDesc, clrDim,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+            TextRenderer.DrawText(e.Graphics, strDesc, lst.Font, rcDesc, clrDim, fl);
         }
 
         private static Color Blend(Color a, Color b, double t) {

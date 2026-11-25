@@ -402,6 +402,7 @@ namespace AgentDockStandalone {
         // since a long transcript takes a moment to read.
         private void RefreshLive(bool ablnForce) {
             if (!mblnLive) return;
+            if (mblnLiveScreen && !ablnForce) ShowPaneScreen(mfncTarget());
             if (mblnLiveLoading) { if (ablnForce) mblnLiveForcePending = true; return; }
             fAgentAbsorbedTerminal pane = mfncTarget();
             if (pane == null) {
@@ -460,7 +461,9 @@ namespace AgentDockStandalone {
                         // A new session has nothing to show until its first message (Story 6850,
                         // Tony saw "No conversation found" on every pane he spawned). The pane's
                         // name is left out: right after a spawn it is still the startup command.
-                        if (lst == null && blnNewSession)
+                        mblnLiveScreen = lst == null && !blnNewSession;
+                        if (mblnLiveScreen) ShowPaneScreen(pane);
+                        else if (lst == null && blnNewSession)
                             vwLive.SetMessage("New session. Nothing has been said yet.\r\nWrite below and the conversation shows here.");
                         else if (lst == null) vwLive.SetMessage("No conversation yet for " + strPaneName
                             + ".\r\nIt shows here once Claude Code or GitHub Copilot CLI has started in this pane.");
@@ -470,6 +473,23 @@ namespace AgentDockStandalone {
                     mblnLiveLoading = false;
                 }
             });
+        }
+
+        // No conversation and no agent session yet (Story 6852): the agent is starting, asking
+        // something before it starts (a folder to trust, a sign-in), or not there at all. The
+        // terminal is hidden in conversation mode, so its screen is shown instead, read on every
+        // tick until a session turns up. Read on the window's thread, like the menu check.
+        private bool mblnLiveScreen;
+
+        private void ShowPaneScreen(fAgentAbsorbedTerminal apane) {
+            if (apane == null || apane.IsDisposed) return;
+            string[] astrLines = null;
+            try { astrLines = cConsoleInput.ReadScreen(apane.AbsorbedHwnd); } catch (Exception) { }
+            if (astrLines == null) {
+                vwLive.SetMessage("No conversation yet for " + apane.Text + ".\r\nIt shows here once Claude Code or GitHub Copilot CLI has started in this pane.");
+                return;
+            }
+            vwLive.SetScreen("No conversation yet. The terminal shows this now (a question here is answered in the Keys window):", astrLines);
         }
 
         // Another pane picked (in Send to, or by clicking in it): Run conversation empties at
@@ -949,59 +969,124 @@ namespace AgentDockStandalone {
         }
 
         // ------------------------------------------------------------ slash commands (Story 6851)
-        // A "/" at the very start of the box opens a pick list of the target pane's commands
-        // (cSlashCommands), narrowed as you type the name. Up / Down move in it, Tab or Enter put
-        // the picked one in the box followed by a space, so whatever it needs can be typed after
-        // it, and the status line says what it does and what it takes. Enter on a name already
-        // typed in full sends as usual. Escape closes the list. Only while the caret is in the
-        // command's name: after the space the box is ordinary text again.
+        // A "/" at the very start of the box shows the target pane's own command list, the one
+        // the agent itself shows (Tony: "When I typed /skill, I should have seen this, and did
+        // not"). While the box holds a one-line command, the agent's input line is kept the same
+        // as the box: cleared (Ctrl+U) and the text typed in, never Enter. Its screen is then read
+        // (cSlashScreen) and its rows shown over the box (fSlashList): its own commands, skills
+        // and plugins, matched its own way, and once a command is complete, the arguments it
+        // takes. Up / Down go to the agent, so the pick is the agent's. Tab or Enter put the picked
+        // command in the box with a space after it, and the agent then shows what it takes. Enter
+        // on a complete command sends, as always: Send clears the agent's input line first, so
+        // nothing is typed twice. Escape closes the list. Clearing the box clears the line.
+        // When the pane's screen cannot be read, the dock's own list (cSlashCommands) is used.
         private fSlashList mfrmSlash;
-        private IntPtr mhwndSlashPane = IntPtr.Zero;
+        private readonly Timer tmrSlashType = new Timer();   // waits for a pause in typing
+        private readonly Timer tmrSlashRead = new Timer();   // waits for the agent to draw
+        private bool   mblnSlashMirrored;                    // the agent's input line holds mstrSlashMirrored
+        private IntPtr mhwndSlashMirror = IntPtr.Zero;
+        private string mstrSlashMirrored;
+        private int    mintSlashReadTries;
+        private bool   mblnSlashLocal;                       // showing the dock's own list
+        private bool   mblnSlashSuppressed;                  // Escape closed it: shut until the text changes
+        private string mstrSlashClosedFor;
+        private IntPtr mhwndSlashPane = IntPtr.Zero;         // for the dock's own list
         private bool   mblnSlashCopilot;
         private string mstrSlashCwd;
-        private bool   mblnSlashSuppressed;    // Escape closed it: stays shut until the name changes
-        private string mstrSlashClosedFor;
+
+        private const string CNST_CLEAR_LINE = "\u0015";     // Ctrl+U: clears the agent's input line
 
         private void WireSlash() {
-            txtPrompt.TextChanged   += delegate { UpdateSlash(); };
-            txtPrompt.KeyUp         += delegate(object s, KeyEventArgs e) {
-                if (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right || e.KeyCode == Keys.Home || e.KeyCode == Keys.End) UpdateSlash();
-            };
-            txtPrompt.MouseUp       += delegate { UpdateSlash(); };
+            tmrSlashType.Interval = 120;
+            tmrSlashType.Tick += delegate { tmrSlashType.Stop(); MirrorSlash(); };
+            tmrSlashRead.Interval = 220;
+            tmrSlashRead.Tick += delegate { tmrSlashRead.Stop(); ReadSlash(); };
+            txtPrompt.TextChanged    += delegate { UpdateSlash(); };
             txtPrompt.PreviewKeyDown += delegate(object s, PreviewKeyDownEventArgs e) {
                 // Tab and Escape reach KeyDown only while the list is open.
                 if (SlashOpen() && (e.KeyCode == Keys.Tab || e.KeyCode == Keys.Escape)) e.IsInputKey = true;
             };
-            txtPrompt.Leave         += delegate { HideSlash(); };
-            this.VisibleChanged     += delegate { if (!this.Visible) HideSlash(); };
-            this.Disposed           += delegate { if (mfrmSlash != null && !mfrmSlash.IsDisposed) mfrmSlash.Dispose(); };
+            txtPrompt.Leave      += delegate { HideSlash(); };
+            this.VisibleChanged  += delegate { if (!this.Visible) HideSlash(); };
+            this.Disposed        += delegate {
+                tmrSlashType.Dispose(); tmrSlashRead.Dispose();
+                if (mfrmSlash != null && !mfrmSlash.IsDisposed) mfrmSlash.Dispose();
+            };
         }
 
         private bool SlashOpen() { return mfrmSlash != null && !mfrmSlash.IsDisposed && mfrmSlash.Visible; }
 
         private void HideSlash() { if (SlashOpen()) mfrmSlash.Hide(); }
 
-        // The name typed after the slash and where it ends, when the caret is in it. False when
-        // the box does not start with a slash or the caret is past the name.
-        private bool SlashToken(out string astrTyped, out int aintEnd) {
-            astrTyped = null; aintEnd = 0;
+        // A one-line command in the box: it starts with "/" and has no line break.
+        private bool SlashText() {
             string s = txtPrompt.Text;
-            if (s.Length == 0 || s[0] != '/') return false;
-            int intEnd = 1;
-            while (intEnd < s.Length && !Char.IsWhiteSpace(s[intEnd])) intEnd++;
-            if (txtPrompt.SelectionStart > intEnd || txtPrompt.SelectionStart == 0) return false;
-            astrTyped = s.Substring(1, intEnd - 1);
-            aintEnd = intEnd;
-            return true;
+            return s.Length > 0 && s[0] == '/' && s.IndexOf('\n') < 0 && s.IndexOf('\r') < 0;
         }
 
         private void UpdateSlash() {
-            string strTyped; int intEnd;
-            if (txtPrompt.ReadOnly || !SlashToken(out strTyped, out intEnd)) { HideSlash(); mblnSlashSuppressed = false; return; }
-            if (mblnSlashSuppressed && strTyped == mstrSlashClosedFor) return;
-            mblnSlashSuppressed = false;
-            List<cSlashCommand> lst = cSlashCommands.Matching(SlashCommandsForTarget(), strTyped);
-            if (lst.Count == 0) { HideSlash(); return; }
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            IntPtr hwnd = pane == null ? IntPtr.Zero : pane.AbsorbedHwnd;
+            if (txtPrompt.ReadOnly || !SlashText() || hwnd == IntPtr.Zero) {
+                tmrSlashType.Stop();
+                HideSlash();
+                ClearSlashMirror();
+                mblnSlashSuppressed = false;
+                return;
+            }
+            if (hwnd != mhwndSlashMirror) ClearSlashMirror();
+            if (mblnSlashSuppressed && txtPrompt.Text != mstrSlashClosedFor) mblnSlashSuppressed = false;
+            tmrSlashType.Stop();
+            tmrSlashType.Start();
+        }
+
+        // Puts the box's text in the agent's input line, then reads what the agent shows.
+        private void MirrorSlash() {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            if (pane == null || pane.IsDisposed || !SlashText() || txtPrompt.ReadOnly) return;
+            IntPtr hwnd = pane.AbsorbedHwnd;
+            string s = txtPrompt.Text;
+            if (!mblnSlashMirrored || hwnd != mhwndSlashMirror || s != mstrSlashMirrored) {
+                string strProblem = cConsoleInput.PressKeys(hwnd, CNST_CLEAR_LINE);
+                if (strProblem == null) strProblem = cConsoleInput.TypeText(hwnd, s);
+                if (strProblem != null) { ShowLocalSlash(); return; }
+                mblnSlashMirrored = true;
+                mhwndSlashMirror  = hwnd;
+                mstrSlashMirrored = s;
+            }
+            mintSlashReadTries = 0;
+            tmrSlashRead.Stop();
+            tmrSlashRead.Start();
+        }
+
+        // Clears the agent's input line when it holds a mirrored command.
+        private void ClearSlashMirror() {
+            if (mblnSlashMirrored && mhwndSlashMirror != IntPtr.Zero && Win32.IsWindow(mhwndSlashMirror))
+                cConsoleInput.PressKeys(mhwndSlashMirror, CNST_CLEAR_LINE);
+            mblnSlashMirrored = false;
+            mstrSlashMirrored = null;
+            mhwndSlashMirror  = IntPtr.Zero;
+        }
+
+        // Reads the agent's list off its screen and shows it. Tries again for a moment when the
+        // agent has not drawn the new text yet.
+        private void ReadSlash() {
+            if (!mblnSlashMirrored || !SlashText()) return;
+            string[] astrLines = null;
+            try { astrLines = cConsoleInput.ReadScreen(mhwndSlashMirror); } catch (Exception) { }
+            if (astrLines == null) { ShowLocalSlash(); return; }
+            cSlashScreen scr = cSlashScreen.Parse(astrLines);
+            string strTyped = mstrSlashMirrored ?? "";
+            bool blnDrawn = scr.FoundInput && scr.Input.StartsWith(strTyped.TrimEnd(), StringComparison.Ordinal);
+            if (!blnDrawn && mintSlashReadTries++ < 6) { tmrSlashRead.Start(); return; }
+            if (!scr.FoundInput) { ShowLocalSlash(); return; }
+            mblnSlashLocal = false;
+            string strHint = scr.HintAfter(strTyped);
+            if (mblnSlashSuppressed || (scr.Rows.Count == 0 && strHint.Length == 0)) { HideSlash(); return; }
+            ShowSlash(scr.Rows, scr.Selected, scr.More, strHint);
+        }
+
+        private void ShowSlash(List<cSlashCommand> arows, int aintSelected, string astrMore, string astrHint) {
             if (mfrmSlash == null || mfrmSlash.IsDisposed) {
                 mfrmSlash = new fSlashList();
                 mfrmSlash.Picked += delegate(cSlashCommand c) { PickSlash(c); txtPrompt.Focus(); };
@@ -1013,11 +1098,24 @@ namespace AgentDockStandalone {
                 }
             }
             Rectangle rc = txtPrompt.RectangleToScreen(txtPrompt.ClientRectangle);
-            mfrmSlash.ShowFor(lst, rc, txtPrompt.BackColor, txtPrompt.ForeColor, this.FindForm());
+            mfrmSlash.ShowFor(arows, aintSelected, astrMore, astrHint, rc, txtPrompt.BackColor, txtPrompt.ForeColor, this.FindForm());
         }
 
-        // The commands of the pane the box sends to. Which agent it runs and its folder are
-        // looked up once per pane.
+        // The pane's screen cannot be read: the dock's own list, matched on the name typed.
+        private void ShowLocalSlash() {
+            mblnSlashLocal = true;
+            if (mblnSlashSuppressed) { HideSlash(); return; }
+            string s = txtPrompt.Text;
+            int intEnd = 1;
+            while (intEnd < s.Length && !Char.IsWhiteSpace(s[intEnd])) intEnd++;
+            if (intEnd < s.Length) { HideSlash(); return; }       // past the name
+            List<cSlashCommand> lst = cSlashCommands.Matching(SlashCommandsForTarget(), s.Substring(1, intEnd - 1));
+            if (lst.Count == 0) { HideSlash(); return; }
+            ShowSlash(lst, 0, "", "");
+        }
+
+        // The dock's own list for the pane the box sends to (fallback). Which agent and folder
+        // are looked up once per pane.
         private List<cSlashCommand> SlashCommandsForTarget() {
             fAgentAbsorbedTerminal pane = mfncTarget();
             IntPtr hwnd = pane == null ? IntPtr.Zero : pane.AbsorbedHwnd;
@@ -1031,25 +1129,24 @@ namespace AgentDockStandalone {
                         mblnSlashCopilot = !cAgentHistory.IsClaude(lstPids) && cAgentHistory.HasSession(lstPids);
                         mstrSlashCwd     = cAgentHistory.ClaudeCwd(lstPids);
                     } catch (Exception) { }
-                    if (mstrSlashCwd == null) mhwndSlashPane = IntPtr.Zero;   // agent still starting: look again next time
+                    if (mstrSlashCwd == null) mhwndSlashPane = IntPtr.Zero;
                 }
             }
             return cSlashCommands.For(mblnSlashCopilot, mstrSlashCwd);
         }
 
-        // Puts "/name " in place of the name typed so far, caret after the space.
+        // Puts "/name " in the box in place of the command typed so far (anything after the
+        // name stays), caret after the space. The mirror then shows the agent what it takes.
         private void PickSlash(cSlashCommand ac) {
-            string strTyped; int intEnd;
-            if (ac == null || !SlashToken(out strTyped, out intEnd)) { HideSlash(); return; }
+            if (ac == null || !SlashText()) { HideSlash(); return; }
             string s = txtPrompt.Text;
-            string strRest = s.Substring(intEnd);
-            if (strRest.Length == 0 || !Char.IsWhiteSpace(strRest[0])) strRest = " " + strRest;
-            txtPrompt.Text = "/" + ac.Name + strRest;
-            txtPrompt.SelectionStart = ac.Name.Length + 2;
+            int intEnd = 1;
+            while (intEnd < s.Length && !Char.IsWhiteSpace(s[intEnd])) intEnd++;
+            string strRest = s.Substring(intEnd).TrimStart();
+            txtPrompt.Text = "/" + ac.Name + " " + strRest;
+            txtPrompt.SelectionStart  = ac.Name.Length + 2;
             txtPrompt.SelectionLength = 0;
-            HideSlash();
-            mactStatus("/" + ac.Name + (ac.ArgumentHint.Length > 0 ? " " + ac.ArgumentHint : "")
-                + (ac.Description.Length > 0 ? ": " + Shorten(ac.Description, 160) : "")
+            mactStatus("/" + ac.Name + (ac.Description.Length > 0 ? ": " + Shorten(ac.Description, 160) : "")
                 + ". Type anything it needs after it, then Enter.");
         }
 
@@ -1060,28 +1157,40 @@ namespace AgentDockStandalone {
         // Keys for the open list. True when the key was used.
         private bool SlashKey(KeyEventArgs e) {
             if (!SlashOpen() || e.Control || e.Alt) return false;
+            bool blnRows = mfrmSlash.RowCount > 0;
             switch (e.KeyCode) {
-                case Keys.Up:       mfrmSlash.Step(-1); break;
-                case Keys.Down:     mfrmSlash.Step(+1); break;
-                case Keys.PageUp:   mfrmSlash.Step(-9); break;
-                case Keys.PageDown: mfrmSlash.Step(+9); break;
-                case Keys.Escape: {
-                    string strTyped; int intEnd;
-                    SlashToken(out strTyped, out intEnd);
+                case Keys.Up:
+                case Keys.Down:
+                case Keys.PageUp:
+                case Keys.PageDown:
+                    if (!blnRows) return false;
+                    if (mblnSlashLocal) {
+                        mfrmSlash.Step(e.KeyCode == Keys.Up ? -1 : e.KeyCode == Keys.Down ? 1 : e.KeyCode == Keys.PageUp ? -9 : 9);
+                    } else if (mblnSlashMirrored) {
+                        cConsoleInput.PressKeys(mhwndSlashMirror, cConsoleInput.KeyCode(e.KeyCode));
+                        mintSlashReadTries = 6;            // the text is there already: one read
+                        tmrSlashRead.Stop();
+                        tmrSlashRead.Start();
+                    }
+                    break;
+                case Keys.Escape:
                     mblnSlashSuppressed = true;
-                    mstrSlashClosedFor  = strTyped;
+                    mstrSlashClosedFor  = txtPrompt.Text;
                     HideSlash();
                     break;
-                }
                 case Keys.Tab:
+                    if (!blnRows) return false;
                     PickSlash(mfrmSlash.Selected);
                     break;
                 case Keys.Enter: {
                     if (e.Shift) return false;
-                    string strTyped; int intEnd;
                     cSlashCommand c = mfrmSlash.Selected;
-                    // The name is already typed in full: send it, like any Enter.
-                    if (c == null || (SlashToken(out strTyped, out intEnd) && String.Equals(strTyped, c.Name, StringComparison.OrdinalIgnoreCase))) {
+                    string s = txtPrompt.Text;
+                    int intEnd = 1;
+                    while (intEnd < s.Length && !Char.IsWhiteSpace(s[intEnd])) intEnd++;
+                    string strTyped = s.Substring(1, intEnd - 1);
+                    // Nothing picked, or the command is typed in full: send it, like any Enter.
+                    if (!blnRows || c == null || String.Equals(strTyped, c.Name, StringComparison.OrdinalIgnoreCase)) {
                         HideSlash();
                         return false;
                     }
@@ -1206,6 +1315,12 @@ namespace AgentDockStandalone {
                 return;
             }
             IntPtr hwnd = pane.AbsorbedHwnd;
+            // A slash command was mirrored into the agent's input line (Story 6851): clear it, so
+            // the command is not typed in twice. Any pane it was mirrored to is cleared.
+            tmrSlashType.Stop();
+            tmrSlashRead.Stop();
+            HideSlash();
+            ClearSlashMirror();
             string strProblem = cConsoleInput.TypeText(hwnd, strText.TrimEnd('\r', '\n'));
             if (strProblem != null) {
                 mactStatus("Not sent: " + strProblem);

@@ -146,14 +146,16 @@ to the end).
 
 - **Enter** (or **Send**) types the prompt into the agent of the pane you last clicked and sends
   it. The box empties and is ready for the next one.
-- **Slash commands:** type **/** as the first thing in the box and a list of that pane's commands
-  opens above it, each with what it does: the agent's own (/clear, /model, /compact ...), your
-  skills, the skills of the folder the agent runs in, and your custom commands. Keep typing to
-  narrow it. **Up / Down** pick, **Tab** or **Enter** puts the command in the box with a space after
-  it, ready for anything it needs, and the bar at the bottom says what it does. A click on a row does
-  the same. **Escape** closes the list. A command already typed in full is sent by Enter as usual. In
-  a Copilot pane the list holds Copilot's commands. Works in the compose box and in every
-  conversation pane.
+- **Slash commands:** type **/** as the first thing in the box and the agent's own command list
+  opens above it, the same list the agent shows in its terminal: its commands, your skills, the
+  project's skills and plugins, matched its way. The dock keeps the agent's input line the same as
+  the box while you type a command (never pressing Enter) and reads the list off its screen.
+  **Up / Down** move the agent's pick, **Tab** or **Enter** put the picked command in the box with a
+  space after it, and the agent's hint for what the command takes (for example
+  `[low|medium|high]`) shows above the box. Type the arguments, then Enter sends it. A command typed
+  in full is sent by Enter at once. **Escape** closes the list, and emptying the box empties the
+  agent's input line too. If the pane's screen cannot be read, the dock shows its own list instead.
+  Works in the compose box and in every conversation pane.
 - **Shift+Enter** starts a new line. A prompt with several lines reaches the agent as one prompt.
 - **Up** on the first line brings back earlier prompts, newest first. **Down** goes forward again,
   back to what you were writing. With Claude Code in the pane, these are every prompt that pane's
@@ -289,7 +291,9 @@ Cascade, Quadrant Layout, and Maximize / Restore Pane (the pane you last wrote i
 In Cascade the one you click in comes to the front. Writing in a conversation pane makes it the pane
 you last clicked, so **Agents -> Close Active Pane** and the rest act on it.
 
-A pane just opened says **New session** until something has been said in it: the agent keeps
+Until the agent in a pane has started a session, its conversation pane shows the terminal's own
+screen, so a question the agent asks before it starts (a folder to trust, a sign-in) can be seen and
+answered (in the Keys window). A pane just opened says **New session** until something has been said in it: the agent keeps
 no record before the first message. Write in its box and the conversation appears.
 
 The terminals keep running, hidden. A pane opened or closed while conversation panes are on gets or
