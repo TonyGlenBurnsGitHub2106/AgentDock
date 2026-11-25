@@ -84,6 +84,23 @@ namespace AgentDockStandalone {
             mCompose.SizeChanged += delegate { if (mPanes != null && mCompose.Visible && !mCompose.IsFullScreen) mPanes.ReTile(); };
             mCompose.FullScreenChanged += new Action<bool>(SetComposeFullScreen);
 
+            // The agent's state, at the right of the status bar (Story 6845): amber while the
+            // pane in Send to is working, green when it is waiting for you.
+            this.tslStatus.Spring    = true;
+            this.tslStatus.TextAlign = ContentAlignment.MiddleLeft;
+            mtslAgentState = new ToolStripStatusLabel();
+            mtslAgentState.Visible     = false;
+            mtslAgentState.Padding     = new Padding(8, 0, 8, 0);
+            mtslAgentState.Font        = new Font(this.ssStatus.Font, FontStyle.Bold);
+            mtslAgentState.ToolTipText = "What the agent in the Send to pane is doing: Thinking (working on your prompt) or Idle (waiting for you).";
+            this.ssStatus.Items.Add(mtslAgentState);
+            mCompose.AgentStateChanged += delegate(string astrText, int aintState) {
+                mtslAgentState.Visible = aintState >= 0;
+                mtslAgentState.Text    = astrText;
+                mtslAgentState.BackColor = aintState == 1 ? Color.FromArgb(255, 214, 120) : Color.FromArgb(170, 225, 170);
+                mtslAgentState.ForeColor = Color.Black;
+            };
+
             // The bar between the panes and the compose box: drag it up for a taller box and
             // smaller panes, down for the other way. The height is remembered (ComposeBoxHeight).
             msplCompose = new Splitter();
@@ -843,6 +860,7 @@ namespace AgentDockStandalone {
         // box fills the dock. The terminals keep running, hidden, and Send still reaches them.
         // Released, the box goes back to its height and the panes are tiled again.
         private int mintComposeHeightBeforeFull = -1;
+        private ToolStripStatusLabel mtslAgentState;
 
         private void SetComposeFullScreen(bool ablnFull) {
             MdiClient mdi = null;

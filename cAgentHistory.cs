@@ -210,6 +210,61 @@ namespace AgentDockStandalone {
             }
         }
 
+        // Whether the agent is working on something or waiting for you (Story 6845, the status
+        // bar): 1 working, 0 idle, -1 unknown (no Claude session, or nothing said yet). Read from
+        // the end of the session's transcript: the last thing said decides it. An answer whose
+        // stop_reason is end_turn means the turn is over. Anything else (your prompt, a tool
+        // call, a tool's result) means the agent is still at it. An interrupt or a slash command
+        // with no answer is idle too.
+        private const int CNST_STATE_TAIL_BYTES = 512 * 1024;
+
+        public static int AgentState(List<uint> alstPids) {
+            try {
+                string strDir = ClaudeDir();
+                if (strDir == null) return -1;
+                string strSession = ClaudeSession(strDir, alstPids);
+                if (strSession == null) return -1;
+                string strFile = TranscriptFile(strDir, strSession);
+                if (strFile == null) return 0;      // a new session, nothing asked yet
+                List<string> lstLines = new List<string>(ReadTailLines(strFile, CNST_STATE_TAIL_BYTES));
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = Int32.MaxValue;
+                for (int i = lstLines.Count - 1; i >= 0; i--) {
+                    string strLine = lstLines[i];
+                    bool blnAssistant = strLine.IndexOf("\"assistant\"", StringComparison.Ordinal) >= 0;
+                    bool blnUser      = strLine.IndexOf("\"user\"", StringComparison.Ordinal) >= 0;
+                    if (!blnAssistant && !blnUser) continue;
+                    Dictionary<string, object> row;
+                    try { row = js.DeserializeObject(strLine) as Dictionary<string, object>; } catch (Exception) { continue; }
+                    if (row == null) continue;
+                    if (row.ContainsKey("isSidechain") && true.Equals(row["isSidechain"])) continue;
+                    string strType = Str(row, "type");
+                    Dictionary<string, object> msg = row.ContainsKey("message") ? row["message"] as Dictionary<string, object> : null;
+                    if (msg == null) continue;
+                    if ("assistant".Equals(strType)) {
+                        string strStop = Str(msg, "stop_reason");
+                        return "end_turn".Equals(strStop) || "stop_sequence".Equals(strStop) ? 0 : 1;
+                    }
+                    if (!"user".Equals(strType)) continue;
+                    if (row.ContainsKey("isMeta") && true.Equals(row["isMeta"])) continue;
+                    if (row.ContainsKey("isCompactSummary") && true.Equals(row["isCompactSummary"])) continue;
+                    string strText = TextBlocks(msg, true);
+                    if (strText == null) return 1;                  // a tool's result: still working
+                    if (strText.TrimStart().StartsWith("[Request interrupted")) return 0;
+                    if (IsHarnessText(strText)) {
+                        // A slash command (no answer follows) or a note the harness slipped in.
+                        string t = strText.TrimStart();
+                        if (t.StartsWith("<command-") || t.StartsWith("<local-command")) return 0;
+                        continue;
+                    }
+                    return 1;                                       // your prompt, not yet answered
+                }
+                return 0;
+            } catch (Exception) {
+                return -1;
+            }
+        }
+
         // Claude Code: the transcripts of the session and the ones before it (a /clear), oldest
         // first. A prompt is a "user" line whose text is not a tool result, a command or a
         // harness note. An answer is the text of an "assistant" message, its lines joined by

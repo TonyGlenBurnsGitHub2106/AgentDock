@@ -172,6 +172,10 @@ to the end).
   to read. A long message is cut short in its bubble. **Right-click any bubble** for **Popup** (the whole message in the answer window, where you can select, edit and copy) or **Copy** (the whole message). A left click does nothing. Drag the bar between the conversation and the text to
   give either more room. The box grows to make room when Run conversation is picked, and goes back
   to its height when you pick another choice. While it is on, Up steps through your prompts.
+- **The agent's state** shows at the right of the status bar while the compose box is on: the pane
+  in Send to and **Thinking...** (amber) while it works on your prompt, or **Idle** (green) when it
+  is waiting for you. It is checked about once a second. Claude Code only for now: with another
+  agent the space stays empty.
 - **Full Screen**, under Send, hides the panes and lets the compose box fill the dock, so with Run
   conversation picked the conversation is all you see. The agents keep running behind it and Send
   still reaches the pane in Send to (pick another pane there). Press Full Screen again to bring the

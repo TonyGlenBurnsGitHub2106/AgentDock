@@ -235,6 +235,7 @@ namespace AgentDockStandalone {
                 ShowTarget();
                 FollowTarget();
                 if (++mintTicks % CNST_SAMPLE_EVERY_TICKS == 0) SampleTabColors();
+                if (mintTicks % CNST_STATE_EVERY_TICKS == 0) CheckAgentState();
             };
             cboTarget.DropDown += delegate { SampleTabColors(); };
         }
@@ -255,7 +256,11 @@ namespace AgentDockStandalone {
         private bool mblnShown;
 
         public void SetShown(bool ablnShow) {
-            if (!ablnShow) LeaveFullScreen();
+            if (!ablnShow) {
+                LeaveFullScreen();
+                mstrLastState = null;
+                if (AgentStateChanged != null) AgentStateChanged("", -1);
+            }
             mblnShown    = ablnShow;
             this.Visible = ablnShow;
             if (ablnShow) { ShowTarget(); tmrTarget.Start(); }
@@ -496,6 +501,29 @@ namespace AgentDockStandalone {
         // Every few ticks, and when the list opens, the panes' tab colors are read off the screen
         // (cPaneColors.SampleFromScreen), only while the dock is the window in front.
         private const int CNST_SAMPLE_EVERY_TICKS = 5;
+
+        // The agent's state in the status bar (Story 6845, Tony: "showed 'thinking' or something
+        // when I have asked a question and you have not yet responded, and idle or something
+        // otherwise"). Every 2 ticks (0.8 s), for the pane in Send to. Raised with the words to
+        // show and 1 working, 0 idle, -1 unknown (nothing shown).
+        private const int CNST_STATE_EVERY_TICKS = 2;
+        public event Action<string, int> AgentStateChanged;
+        private string mstrLastState;
+
+        private void CheckAgentState() {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            int intState = -1;
+            if (pane != null) {
+                List<uint> lstPids = PidsFor(pane.AbsorbedHwnd);
+                if (lstPids != null && lstPids.Count > 0) intState = cAgentHistory.AgentState(lstPids);
+            }
+            string strText = intState < 0 || pane == null ? ""
+                : pane.Text + ": " + (intState == 1 ? "Thinking..." : "Idle");
+            string strKey = intState + "|" + strText;
+            if (strKey == mstrLastState) return;
+            mstrLastState = strKey;
+            if (AgentStateChanged != null) AgentStateChanged(strText, intState);
+        }
         private int mintTicks;
 
         private void SampleTabColors() {
