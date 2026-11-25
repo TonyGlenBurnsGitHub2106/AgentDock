@@ -89,6 +89,14 @@ namespace AgentDockStandalone {
         // The pane's Copilot conversation, oldest first (Story 6828): user.message and
         // assistant.message lines in order, or only the answers. Null when no session is found.
         public static List<cHistoryEntry> ConversationForPids(List<uint> alstPids, bool ablnAnswersOnly) {
+            return ConversationForPids(alstPids, ablnAnswersOnly, false);
+        }
+
+        // ablnStopAtClear (Story 6846, Run conversation): only what was said since the last clear,
+        // as for Claude Code. Copilot's /clear is not documented, so both likely shapes are
+        // handled: a new session (only the newest session is read), or a mark in the same file
+        // (an event whose type names a clear, or a "/clear" prompt), which empties what came before.
+        public static List<cHistoryEntry> ConversationForPids(List<uint> alstPids, bool ablnAnswersOnly, bool ablnStopAtClear) {
             try {
                 string strDir = CopilotDir();
                 if (strDir == null || alstPids == null) return null;
@@ -99,12 +107,15 @@ namespace AgentDockStandalone {
                 foreach (uint intPid in alstPids) {
                     List<string> lstSessions = SessionsOf(strDir, strStates, intPid);
                     if (lstSessions.Count == 0) continue;
+                    if (ablnStopAtClear && lstSessions.Count > 1) lstSessions.RemoveRange(0, lstSessions.Count - 1);
                     List<cHistoryEntry> lst = new List<cHistoryEntry>();
+                    bool blnFound = false;
                     foreach (string strSession in lstSessions) {
-                        string strFile = Path.Combine(Path.Combine(strStates, strSession), "events.jsonl");
-                        if (!File.Exists(strFile)) strFile = Path.Combine(strStates, strSession + ".jsonl");
-                        if (!File.Exists(strFile)) continue;
+                        string strFile = EventsFile(strStates, strSession);
+                        if (strFile == null) continue;
+                        blnFound = true;
                         foreach (string strLine in cAgentHistory.ReadTailLines(strFile)) {
+                            if (ablnStopAtClear && IsClearLine(strLine)) { lst.Clear(); continue; }
                             if (strLine.IndexOf(".message", StringComparison.Ordinal) < 0) continue;
                             Dictionary<string, object> row;
                             try { row = js.DeserializeObject(strLine) as Dictionary<string, object>; } catch (Exception) { continue; }
@@ -117,11 +128,106 @@ namespace AgentDockStandalone {
                             lst.Add(new cHistoryEntry(strText, blnAnswer));
                         }
                     }
-                    if (lst.Count > 0) return lst;
+                    // A session just cleared is an empty conversation, not "no Copilot here".
+                    if (lst.Count > 0 || (ablnStopAtClear && blnFound)) return lst;
                 }
                 return null;
             } catch (Exception) {
                 return null;
+            }
+        }
+
+        private static string EventsFile(string astrStates, string astrSession) {
+            string strFile = Path.Combine(Path.Combine(astrStates, astrSession), "events.jsonl");
+            if (File.Exists(strFile)) return strFile;
+            strFile = Path.Combine(astrStates, astrSession + ".jsonl");
+            return File.Exists(strFile) ? strFile : null;
+        }
+
+        private static readonly Regex RX_TYPE = new Regex(@"""type""\s*:\s*""([^""]+)""");
+
+        // The event's type, read without parsing the whole line (lines carrying tool output are long).
+        private static string TypeOf(string astrLine) {
+            Match m = RX_TYPE.Match(astrLine);
+            return m.Success ? m.Groups[1].Value : null;
+        }
+
+        // An event marking a clear: a type that names one (session.clear, ...cleared), or a prompt
+        // that is exactly "/clear" or "/new".
+        private static bool IsClearLine(string astrLine) {
+            string strType = TypeOf(astrLine);
+            if (strType == null) return false;
+            if (strType.IndexOf("clear", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (strType != "user.message") return false;
+            return Regex.IsMatch(astrLine, @"""content""\s*:\s*""\s*/(clear|new)\s*""");
+        }
+
+        // The newest events file of the pane's Copilot session, or null when there is none.
+        private static string NewestEventsFile(List<uint> alstPids) {
+            string strDir = CopilotDir();
+            if (strDir == null || alstPids == null) return null;
+            string strStates = Path.Combine(strDir, "session-state");
+            if (!Directory.Exists(strStates)) return null;
+            foreach (uint intPid in alstPids) {
+                List<string> lstSessions = SessionsOf(strDir, strStates, intPid);
+                if (lstSessions.Count == 0) continue;
+                string strFile = EventsFile(strStates, lstSessions[lstSessions.Count - 1]);
+                if (strFile != null) return strFile;
+            }
+            return null;
+        }
+
+        // A cheap sign of whether the conversation changed: the events file's size and write time.
+        public static string Stamp(List<uint> alstPids) {
+            try {
+                string strFile = NewestEventsFile(alstPids);
+                if (strFile == null) return null;
+                FileInfo fi = new FileInfo(strFile);
+                return strFile + "|" + fi.Length + "|" + fi.LastWriteTimeUtc.Ticks;
+            } catch (Exception) {
+                return null;
+            }
+        }
+
+        // Whether Copilot is working on a prompt (1) or waiting for you (0), -1 when unknown
+        // (Story 6846, Tony: "Right now everything needs to work for both copilot and claude code").
+        // Copilot writes no "done" to its record (its session.idle is never saved, and turn_end
+        // also falls between tool rounds), so it is read from the last events:
+        //   task complete, shutdown, abort or an error -> idle;
+        //   a prompt, a turn starting, a tool running or finished, a message being written -> working;
+        //   a turn that ended without running a tool -> idle (that was the answer);
+        //   a turn that ended after running tools -> working, as another turn follows, unless nothing
+        //   has been written for two minutes (an interrupted turn).
+        private const int CNST_TURN_GRACE_SECONDS = 120;
+
+        public static int AgentState(List<uint> alstPids) {
+            try {
+                string strFile = NewestEventsFile(alstPids);
+                if (strFile == null) return -1;
+                List<string> lstLines = new List<string>(cAgentHistory.ReadTailLines(strFile, 2 * 1024 * 1024));
+                bool blnSawTurnEnd = false;
+                for (int i = lstLines.Count - 1; i >= 0; i--) {
+                    string strType = TypeOf(lstLines[i]);
+                    if (strType == null) continue;
+                    if (!blnSawTurnEnd) {
+                        if (strType == "session.task_complete" || strType == "session.shutdown" || strType == "abort"
+                            || strType.EndsWith(".abort") || strType == "session.error") return 0;
+                        if (strType == "assistant.turn_end") { blnSawTurnEnd = true; continue; }
+                        if (strType == "user.message" || strType == "assistant.turn_start" || strType == "assistant.message"
+                            || strType.StartsWith("tool.") || strType.StartsWith("subagent.")
+                            || strType == "session.compaction_start") return 1;
+                        continue;
+                    }
+                    // After the last turn_end, looking back through that turn.
+                    if (strType.StartsWith("tool.")) {
+                        double dblQuiet = (DateTime.UtcNow - File.GetLastWriteTimeUtc(strFile)).TotalSeconds;
+                        return dblQuiet > CNST_TURN_GRACE_SECONDS ? 0 : 1;
+                    }
+                    if (strType == "assistant.turn_start" || strType == "user.message") return 0;   // a turn with no tools
+                }
+                return blnSawTurnEnd ? 0 : -1;
+            } catch (Exception) {
+                return -1;
             }
         }
 

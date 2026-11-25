@@ -157,6 +157,14 @@ namespace AgentDockStandalone {
 
         // The same sessions in the order found: this one, then the one it came from, and so on.
         private static List<string> SessionChainNewestFirst(string astrDir, string astrSession) {
+            return SessionChainNewestFirst(astrDir, astrSession, false);
+        }
+
+        // ablnStopAtClear (Story 6846, Run conversation): a session a /clear started is not followed
+        // back past the clear, so the conversation shows starts empty, as the terminal does (Tony:
+        // "if clear is entered via the slash command, the clear should also happen in the compose
+        // dialog"). A resume is still followed. Up never stops: it reaches back past a /clear.
+        private static List<string> SessionChainNewestFirst(string astrDir, string astrSession, bool ablnStopAtClear) {
             List<string> lst = new List<string>();
             Queue<string> todo = new Queue<string>();
             todo.Enqueue(astrSession);
@@ -164,7 +172,7 @@ namespace AgentDockStandalone {
                 string strId = todo.Dequeue();
                 if (lst.Contains(strId)) continue;
                 lst.Add(strId);
-                foreach (string strFrom in DerivedFrom(astrDir, strId)) todo.Enqueue(strFrom);
+                foreach (string strFrom in DerivedFrom(astrDir, strId, ablnStopAtClear)) todo.Enqueue(strFrom);
             }
             return lst;
         }
@@ -186,8 +194,8 @@ namespace AgentDockStandalone {
         // The same for processes already found (Story 6845, Run conversation): safe off the
         // window's thread, since it does not touch the console the way finding the processes does.
         public static List<cHistoryEntry> ConversationForPids(List<uint> alstPids, int aintMax) {
-            List<cHistoryEntry> lst = ClaudeConversation(alstPids, false);
-            if (lst == null) lst = cCopilotHistory.ConversationForPids(alstPids, false);
+            List<cHistoryEntry> lst = ClaudeConversation(alstPids, false, true);   // starts at the last /clear
+            if (lst == null) lst = cCopilotHistory.ConversationForPids(alstPids, false, true);
             if (lst != null && lst.Count > aintMax) lst.RemoveRange(0, lst.Count - aintMax);
             return lst;
         }
@@ -198,9 +206,9 @@ namespace AgentDockStandalone {
         public static string ConversationStamp(List<uint> alstPids) {
             try {
                 string strDir = ClaudeDir();
-                if (strDir == null) return null;
+                if (strDir == null) return cCopilotHistory.Stamp(alstPids);
                 string strSession = ClaudeSession(strDir, alstPids);
-                if (strSession == null) return null;
+                if (strSession == null) return cCopilotHistory.Stamp(alstPids);
                 string strFile = TranscriptFile(strDir, strSession);
                 if (strFile == null) return strSession;
                 FileInfo fi = new FileInfo(strFile);
@@ -221,9 +229,9 @@ namespace AgentDockStandalone {
         public static int AgentState(List<uint> alstPids) {
             try {
                 string strDir = ClaudeDir();
-                if (strDir == null) return -1;
+                if (strDir == null) return cCopilotHistory.AgentState(alstPids);
                 string strSession = ClaudeSession(strDir, alstPids);
-                if (strSession == null) return -1;
+                if (strSession == null) return cCopilotHistory.AgentState(alstPids);   // Copilot, or no agent
                 string strFile = TranscriptFile(strDir, strSession);
                 if (strFile == null) return 0;      // a new session, nothing asked yet
                 List<string> lstLines = new List<string>(ReadTailLines(strFile, CNST_STATE_TAIL_BYTES));
@@ -270,12 +278,17 @@ namespace AgentDockStandalone {
         // harness note. An answer is the text of an "assistant" message, its lines joined by
         // message id.
         private static List<cHistoryEntry> ClaudeConversation(List<uint> alstPids, bool ablnAnswersOnly) {
+            return ClaudeConversation(alstPids, ablnAnswersOnly, false);
+        }
+
+        // ablnStopAtClear: only what was said since the last /clear (Run conversation).
+        private static List<cHistoryEntry> ClaudeConversation(List<uint> alstPids, bool ablnAnswersOnly, bool ablnStopAtClear) {
             try {
                 string strDir = ClaudeDir();
                 if (strDir == null) return null;
                 string strSession = ClaudeSession(strDir, alstPids);
                 if (strSession == null) return null;
-                List<string> lstChain = SessionChainNewestFirst(strDir, strSession);
+                List<string> lstChain = SessionChainNewestFirst(strDir, strSession, ablnStopAtClear);
                 lstChain.Reverse();
                 JavaScriptSerializer js = new JavaScriptSerializer();
                 js.MaxJsonLength = Int32.MaxValue;
@@ -318,6 +331,12 @@ namespace AgentDockStandalone {
                             if (row.ContainsKey("isMeta") && true.Equals(row["isMeta"])) continue;
                             if (row.ContainsKey("isCompactSummary") && true.Equals(row["isCompactSummary"])) continue;
                             string strText = TextBlocks(msg, true);
+                            // A /clear written into this same transcript empties Run conversation too.
+                            if (ablnStopAtClear && strText != null && strText.IndexOf("<command-name>/clear</command-name>", StringComparison.Ordinal) >= 0) {
+                                lst.Clear();
+                                strLastMsgId = null;
+                                continue;
+                            }
                             if (strText == null || IsHarnessText(strText)) continue;
                             lst.Add(new cHistoryEntry(strText, false));
                             strLastMsgId = null;
@@ -371,6 +390,29 @@ namespace AgentDockStandalone {
             return s.StartsWith("<command-") || s.StartsWith("<local-command") || s.StartsWith("<system-reminder>")
                 || s.StartsWith("<task-notification>") || s.StartsWith("[Request interrupted")
                 || s.StartsWith("Caveat:");
+        }
+
+        // One session named in a derived-from line: {"id":"...","via":"clear"}.
+        private static readonly Regex RX_FROM_SESSION = new Regex(@"\{[^{}]*""id""\s*:\s*""[^""]+""[^{}]*\}");
+        private static readonly Regex RX_VIA_CLEAR    = new Regex(@"""via""\s*:\s*""clear""");
+
+        private static List<string> DerivedFrom(string astrDir, string astrSession, bool ablnStopAtClear) {
+            if (!ablnStopAtClear) return DerivedFrom(astrDir, astrSession);
+            List<string> lst = new List<string>();
+            try {
+                if (astrSession.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return lst;
+                string strFile = TranscriptFile(astrDir, astrSession);
+                if (strFile == null) return lst;
+                foreach (string strLine in ReadHeadLines(strFile)) {
+                    if (!RX_DERIVED.IsMatch(strLine)) continue;
+                    foreach (Match mSession in RX_FROM_SESSION.Matches(strLine)) {
+                        if (RX_VIA_CLEAR.IsMatch(mSession.Value)) continue;     // the clear: stop here
+                        Match mId = RX_FROM_ID.Match(mSession.Value);
+                        if (mId.Success) lst.Add(mId.Groups[1].Value);
+                    }
+                }
+            } catch (Exception) { /* no chain, the session alone */ }
+            return lst;
         }
 
         private static List<string> DerivedFrom(string astrDir, string astrSession) {

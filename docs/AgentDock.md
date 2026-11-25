@@ -178,7 +178,12 @@ to the end).
   in Send to and **Thinking...** (amber) while it works on your prompt, or **Idle** (green) when it
   is waiting for you. It is checked about once a second. In Run conversation an **Agent is
   working...** marker also sits under the last message until the agent has finished its answer.
-  Claude Code only for now: with another agent nothing shows.
+  It works for Claude Code and GitHub Copilot CLI. Copilot writes down no "finished" mark, so for
+  Copilot the dock works it out from what was written last (a turn that ran tools counts as still
+  working, until two minutes pass with nothing new). With another agent nothing shows.
+- **`/clear` empties Run conversation too.** Type `/clear` in a pane (in the terminal or the
+  compose box) and its conversation above the text starts empty, like the terminal, for Claude
+  Code and Copilot alike. Up still reaches the prompts from before it.
 - **Full Screen**, under Send, hides the panes and lets the compose box fill the dock, so with Run
   conversation picked the conversation is all you see. The button then reads **Dock**: press it to
   bring the panes back, and it reads Full Screen again. The agents keep running behind it and Send
