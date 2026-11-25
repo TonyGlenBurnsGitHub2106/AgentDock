@@ -5,5 +5,5 @@ using System.Reflection;
 // hand for a bigger step. Help -> About shows it.
 [assembly: AssemblyTitle("Agent Dock")]
 [assembly: AssemblyProduct("Agent Dock")]
-[assembly: AssemblyVersion("1.0.53")]
-[assembly: AssemblyFileVersion("1.0.53")]
+[assembly: AssemblyVersion("1.0.54")]
+[assembly: AssemblyFileVersion("1.0.54")]

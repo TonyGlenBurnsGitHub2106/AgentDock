@@ -45,7 +45,7 @@ namespace AgentDockStandalone {
                     if (IsRule(aastrLines[j])) { intTop = i; intBottom = j; break; }
                 }
             }
-            if (intTop < 0) return r;
+            if (intTop < 0) return ParseCopilot(aastrLines);
             r.FoundInput = true;
             string strFirst = aastrLines[intTop + 1].TrimStart();
             r.Input = strFirst.Substring(1).TrimStart().TrimEnd();
@@ -80,10 +80,73 @@ namespace AgentDockStandalone {
             return r;
         }
 
+        // GitHub Copilot CLI draws it differently (2026-11-25, v1.0.108, captured by Rex at work):
+        //
+        //   (heavy bar) ----------------------------------   U+257B then U+2584s: the box's top
+        //   | /model                                          U+2503, then the input line
+        //   (heavy bar) ----------------------------------   U+2579 then U+2580s: the box's bottom
+        //
+        // The list sits ABOVE the box, one row per line, each starting with U+2503:
+        //   | > /model          Select the AI model for this sessio...   the picked row (U+276F)
+        //   |   /move           Move your uncommitted changes into ...   a row
+        // Six rows show, with no "more" line. The input line shows the picked row's name, not
+        // what was typed ("/mo" shows "/model"). After "/model " the rows are the command's
+        // arguments ("/model plan  Set the model used while in plan mode", the first row being
+        // "/model" itself) and the input line carries its usage: "/model [plan|fusion|...]".
+        // Ctrl+U clears Copilot's input line too.
+        private const char CNST_CP_TOP    = '\u257B';
+        private const char CNST_CP_TOPBAR = '\u2584';
+        private const char CNST_CP_BOTTOM = '\u2579';
+        private const char CNST_CP_SIDE   = '\u2503';
+        private static readonly Regex RX_CP_ROW = new Regex("^\\s*(?:(\u276F)\\s+)?(/\\S+(?: \\S+)*?)(?:\\s{2,}(.*))?$");
+
+        public bool Copilot;                       // read from a Copilot screen
+
+        private static cSlashScreen ParseCopilot(string[] aastrLines) {
+            cSlashScreen r = new cSlashScreen();
+            int intTop = -1, intBottom = -1;
+            for (int i = 0; i < aastrLines.Length; i++) {
+                string t = aastrLines[i].Trim();
+                if (t.Length >= 20 && t[0] == CNST_CP_TOP && t[1] == CNST_CP_TOPBAR) {
+                    for (int j = i + 1; j < aastrLines.Length; j++) {
+                        string u = aastrLines[j].Trim();
+                        if (u.Length > 0 && u[0] == CNST_CP_BOTTOM) { intTop = i; intBottom = j; break; }
+                        if (u.Length == 0 || u[0] != CNST_CP_SIDE) break;
+                    }
+                }
+            }
+            if (intTop < 0) return r;
+            r.FoundInput = true;
+            r.Copilot    = true;
+            List<string> lstInput = new List<string>();
+            for (int k = intTop + 1; k < intBottom; k++) lstInput.Add(aastrLines[k].Trim().Substring(1).Trim());
+            r.Input = String.Join("\n", lstInput.ToArray()).Trim();
+
+            int intFirst = intTop;
+            while (intFirst > 0 && aastrLines[intFirst - 1].TrimStart().StartsWith(CNST_CP_SIDE.ToString(), StringComparison.Ordinal)) intFirst--;
+            for (int k = intFirst; k < intTop; k++) {
+                string s = aastrLines[k].TrimStart().Substring(1);
+                Match m = RX_CP_ROW.Match(s.TrimEnd());
+                if (!m.Success) continue;
+                if (m.Groups[1].Success && m.Groups[1].Value.Length > 0) r.Selected = r.Rows.Count;
+                string strDesc = m.Groups[3].Success ? m.Groups[3].Value.Trim() : "";
+                if (strDesc.EndsWith("\u2026", StringComparison.Ordinal)) strDesc = strDesc.Substring(0, strDesc.Length - 1).TrimEnd() + "...";
+                r.Rows.Add(new cSlashCommand(m.Groups[2].Value.Substring(1), strDesc, null));
+            }
+            return r;
+        }
+
         // The argument hint the agent shows after astrTyped, or "" (see the class comment).
         public string HintAfter(string astrTyped) {
             string strTyped = (astrTyped ?? "").TrimEnd();
             if (strTyped.Length == 0 || !Input.StartsWith(strTyped, StringComparison.Ordinal)) return "";
+            if (Copilot) {
+                // Copilot's input line shows the picked name while the name is typed, so only
+                // what follows a typed space is a hint.
+                if (!(astrTyped ?? "").EndsWith(" ", StringComparison.Ordinal)) return "";
+                string strUsage = Input.Substring(strTyped.Length).Trim();
+                return strUsage.Length > 0 ? strTyped + "  " + strUsage : "";
+            }
             if (Rows.Count > 0) return "";
             string strRest = Input.Substring(strTyped.Length).Trim();
             return strRest.Length > 0 ? strTyped + "  " + strRest : "";

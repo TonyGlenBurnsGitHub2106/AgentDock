@@ -1143,8 +1143,20 @@ namespace AgentDockStandalone {
             int intEnd = 1;
             while (intEnd < s.Length && !Char.IsWhiteSpace(s[intEnd])) intEnd++;
             string strRest = s.Substring(intEnd).TrimStart();
-            txtPrompt.Text = "/" + ac.Name + " " + strRest;
-            txtPrompt.SelectionStart  = ac.Name.Length + 2;
+            string strName = ac.Name;
+            if (strName.IndexOf(' ') > 0) {
+                // A Copilot argument row ("model --session|-s"): it is the whole line, and of
+                // the choices it offers ("a|b") the first is put in.
+                string[] astrParts = strName.Split(' ');
+                for (int i = 0; i < astrParts.Length; i++) {
+                    int intBar = astrParts[i].IndexOf('|');
+                    if (intBar > 0) astrParts[i] = astrParts[i].Substring(0, intBar);
+                }
+                strName = String.Join(" ", astrParts);
+                strRest = "";
+            }
+            txtPrompt.Text = "/" + strName + " " + strRest;
+            txtPrompt.SelectionStart  = strName.Length + 2;
             txtPrompt.SelectionLength = 0;
             mactStatus("/" + ac.Name + (ac.Description.Length > 0 ? ": " + Shorten(ac.Description, 160) : "")
                 + ". Type anything it needs after it, then Enter.");

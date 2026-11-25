@@ -155,7 +155,9 @@ to the end).
   `[low|medium|high]`) shows above the box. Type the arguments, then Enter sends it. A command typed
   in full is sent by Enter at once. **Escape** closes the list, and emptying the box empties the
   agent's input line too. If the pane's screen cannot be read, the dock shows its own list instead.
-  Works in the compose box and in every conversation pane.
+  Works for Claude Code and GitHub Copilot CLI, in the compose box and in every conversation pane.
+  In Copilot, after a command and a space the list shows the command's arguments (for `/model `:
+  `plan`, `fusion`, `--session` ...), and picking one puts it in the box.
 - **Shift+Enter** starts a new line. A prompt with several lines reaches the agent as one prompt.
 - **Up** on the first line brings back earlier prompts, newest first. **Down** goes forward again,
   back to what you were writing. With Claude Code in the pane, these are every prompt that pane's
