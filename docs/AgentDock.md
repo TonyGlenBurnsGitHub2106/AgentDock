@@ -117,6 +117,8 @@ there instead.
 
 ### Settings
 - **Show Compose Box**, **Agent Dock Settings...**, **Open Config Folder**, **Update Agent Dock**: see **Settings** above.
+- **Conversation Panes**: see **Conversation panes** below.
+- **Compose Box Theme**, **Bubble Style**, **Pane Theme**: see **The compose box** below.
 
 ### Help
 - **Usage and Menu Reference** (F1): this help.
@@ -180,11 +182,30 @@ to the end).
   conversation picked the conversation is all you see. The agents keep running behind it and Send
   still reaches the pane in Send to (pick another pane there). Press Full Screen again to bring the
   panes back. Hiding the compose box also brings them back.
+- **Clear Screen**, beside Full Screen, wipes the screen and the scrollback of the pane in Send to,
+  the way `cls` does. The agent keeps its whole conversation, so it is safe at any moment, even
+  while the agent works. Its prompt line comes back when you type or it next writes. One limit: Claude
+  Code draws its whole conversation again whenever its terminal changes size, so a re-tile or a
+  resized dock brings the old screen back. Press Clear Screen again then.
 - **Settings -> Compose Box Theme** colors the compose box: Windows (the plain look, the default),
   Daylight, Dark, Midnight, Nord, Dracula, Solarized Light, Solarized Dark, Forest, Ocean, Sepia,
   Rose, Lavender, Slate, Amber Terminal, Green Terminal, Sunset and High Contrast. Each theme sets
   the box, the text, the buttons and lists, and the two kinds of bubble. It changes at once and the
   dock remembers it.
+- **Settings -> Bubble Style** sets how the conversation's messages are drawn, from plain to
+  fancy: **Plain** (no bubbles, each message a row with a colored bar at its left), **Minimal**
+  (square blocks of color), **Boxed** (square, thin outline), **Classic** (the default: your
+  prompts rounder, the answers squarer, outlined), **Outline** (outlines only), **Soft** (round,
+  no outline), **Chat** (round with a little tail, like a phone), **Shadowed** (rounded, outlined,
+  with a shadow) and **Fancy** (shaded fill, shadow, tail and a bold outline). The colors still
+  come from the theme. It changes at once and the dock remembers it.
+- **The theme and bubble style apply to every pane**, unless a pane has its own. **Settings ->
+  Pane Theme** gives the pane you last clicked its own **Colors**, its own **Bubbles**, or both,
+  and **Use the Dock's Theme** puts it back. What a pane does not override follows the dock, so
+  changing the dock's theme changes every pane except the ones with their own colors. The compose
+  box shows each pane in its own look as you move between panes. A pane keeps its look through an
+  update of the dock, but not once its terminal is closed.
+
 - **Copy**, beside Popup Answer, copies what is selected in the box, or all of it when nothing is.
 - **The bar above the box** resizes it: drag it up for a taller box and smaller panes, down for the
   other way. The dock remembers the height.
@@ -206,6 +227,22 @@ to the end).
 
 If a prompt cannot be sent, it stays in the box and the status bar says why. A pane running as
 administrator can only be reached while the dock itself runs as administrator.
+
+---
+
+## Conversation panes
+
+**Settings -> Conversation Panes** hides every terminal and shows each one as its conversation
+instead: a grid with one conversation pane per terminal, in the dock's pane order. Each has its own
+text box, Send, Popup Answer, Copy and Clear Screen, and sends only to its own terminal. Its header
+shows the pane's number and name on its tab's color, and **Thinking...** or **Idle** at the right.
+The **Theme** button in the header (or a right-click on the header) gives that pane its own colors
+or bubbles, the same menu as **Settings -> Pane Theme**. Writing in a conversation pane makes it the
+pane you last clicked, so **Agents -> Close Active Pane** and the rest act on it.
+
+The terminals keep running, hidden. A pane opened or closed while conversation panes are on gets or
+loses its conversation pane within a second. The dock's own compose box is hidden meanwhile and comes
+back as it was when you turn conversation panes off. The dock remembers the setting.
 
 ---
 

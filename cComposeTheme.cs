@@ -116,5 +116,12 @@ namespace AgentDockStandalone {
                 if (String.Equals(t.Name, astrName, StringComparison.OrdinalIgnoreCase)) return t;
             return maAll[0];
         }
+
+        // True when a theme of that name exists (Story 6846, the per-pane overrides).
+        public static bool Exists(string astrName) {
+            foreach (cComposeTheme t in maAll)
+                if (String.Equals(t.Name, astrName, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
     }
 }

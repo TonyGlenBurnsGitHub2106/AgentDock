@@ -40,7 +40,57 @@ namespace AgentDockStandalone {
             return Write(ahwndTerminal, "\r");
         }
 
+        // Wipes the screen and the scrollback of the terminal behind ahwndTerminal (Story 6846,
+        // Clear Screen), the way cls does: the terminal's own clear codes go to the console's
+        // OUTPUT, so the agent never sees a key and keeps its conversation. Ctrl+L was tried first
+        // and does not do it: Claude Code answers Ctrl+L by drawing the whole conversation again.
+        // The agent's prompt box comes back at the top the next time it draws (a key, its timer).
+        public static string ClearScreen(IntPtr ahwndTerminal) {
+            return WithConsole(ahwndTerminal, delegate {
+                IntPtr hOut = CreateFile("CONOUT$", GENERIC_READ | GENERIC_WRITE,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
+                if (hOut == INVALID_HANDLE_VALUE) return "Could not open the pane's screen.";
+                try {
+                    // Home, erase the screen, erase the scrollback.
+                    string strClear = "\u001b[H\u001b[2J\u001b[3J";
+                    uint intWritten;
+                    if (!WriteConsole(hOut, strClear, (uint)strClear.Length, out intWritten, IntPtr.Zero))
+                        return "Windows refused (error " + Marshal.GetLastWin32Error() + ").";
+                    return null;
+                } finally {
+                    CloseHandle(hOut);
+                }
+            });
+        }
+
+        // Attaches to the console behind ahwndTerminal, runs afnc there and lets go again.
+        private static string WithConsole(IntPtr ahwndTerminal, Func<string> afnc) {
+            if (ahwndTerminal == IntPtr.Zero || !IsWindow(ahwndTerminal)) return "That pane has closed.";
+            List<uint> lstShells;
+            try { lstShells = cTabColor.FindTerminalShells(); } catch (Exception) { lstShells = new List<uint>(); }
+            bool blnAnyAttach = false;
+            foreach (uint intPid in lstShells) {
+                FreeConsole();
+                if (!AttachConsole(intPid)) continue;
+                blnAnyAttach = true;
+                try {
+                    IntPtr hwndConsole = GetConsoleWindow();
+                    if (hwndConsole == IntPtr.Zero || GetWindow(hwndConsole, GW_OWNER) != ahwndTerminal) continue;
+                    return afnc();
+                } finally {
+                    FreeConsole();
+                }
+            }
+            return blnAnyAttach || lstShells.Count == 0
+                ? "Could not find the agent behind that pane."
+                : "Could not reach that pane. A pane running as administrator needs the dock running as administrator.";
+        }
+
         private static string Write(IntPtr ahwndTerminal, string astrKeys) {
+            return Write(ahwndTerminal, BuildRecords(astrKeys));
+        }
+
+        private static string Write(IntPtr ahwndTerminal, INPUT_RECORD[] arecs) {
             if (ahwndTerminal == IntPtr.Zero || !IsWindow(ahwndTerminal)) return "That pane has closed.";
             List<uint> lstShells;
             try { lstShells = cTabColor.FindTerminalShells(); } catch (Exception) { lstShells = new List<uint>(); }
@@ -56,7 +106,7 @@ namespace AgentDockStandalone {
                         FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
                     if (hIn == INVALID_HANDLE_VALUE) return "Could not open the pane's input.";
                     try {
-                        INPUT_RECORD[] recs = BuildRecords(astrKeys);
+                        INPUT_RECORD[] recs = arecs;
                         uint intWritten;
                         if (!WriteConsoleInput(hIn, recs, (uint)recs.Length, out intWritten))
                             return "Windows refused the typing (error " + Marshal.GetLastWin32Error() + ").";
@@ -172,5 +222,8 @@ namespace AgentDockStandalone {
             out uint lpNumberOfEventsWritten);
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool CloseHandle(IntPtr hObject);
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "WriteConsoleW")]
+        private static extern bool WriteConsole(IntPtr hConsoleOutput, string lpBuffer, uint nNumberOfCharsToWrite,
+            out uint lpNumberOfCharsWritten, IntPtr lpReserved);
     }
 }

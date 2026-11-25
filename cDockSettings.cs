@@ -51,6 +51,14 @@ namespace AgentDockStandalone {
         // Settings -> Compose Box Theme. Windows (the plain system look) by default.
         public const string KEY_COMPOSE_THEME = "ComposeTheme";
 
+        // How Run conversation draws its messages (Story 6846): a style name from cBubbleStyle,
+        // from Plain to Fancy, picked in Settings -> Bubble Style. Classic by default.
+        public const string KEY_BUBBLE_STYLE = "BubbleStyle";
+
+        // Conversation panes (Story 6846): every terminal hides and is replaced by its own Run
+        // conversation with a text box to write in. Settings -> Conversation Panes. Off by default.
+        public const string KEY_CONVERSATION_PANES = "ConversationPanes";
+
         private static readonly Dictionary<string, string> mdicValues =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static string mstrConfigFolder;
@@ -112,6 +120,29 @@ namespace AgentDockStandalone {
                     return cComposeTheme.Named(strValue).Name;
                 return cComposeTheme.CNST_DEFAULT;
             }
+        }
+
+        public static string BubbleStyle {
+            get {
+                string strValue;
+                if (mdicValues.TryGetValue(KEY_BUBBLE_STYLE, out strValue) && strValue.Length > 0)
+                    return cBubbleStyle.Named(strValue).Name;
+                return cBubbleStyle.CNST_DEFAULT;
+            }
+        }
+
+        public static void SaveBubbleStyle(string astrName) {
+            mdicValues[KEY_BUBBLE_STYLE] = cBubbleStyle.Named(astrName).Name;
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
+        }
+
+        public static bool ConversationPanes {
+            get { return ReadBool(KEY_CONVERSATION_PANES, false); }
+        }
+
+        public static void SaveConversationPanes(bool ablnOn) {
+            mdicValues[KEY_CONVERSATION_PANES] = ablnOn ? "true" : "false";
+            Save(HidePaneTitleBars, StartAsAdministrator, ShowComposeBox);
         }
 
         public static void SaveComposeTheme(string astrName) {
@@ -264,7 +295,15 @@ namespace AgentDockStandalone {
                  + KEY_COMPOSE_UP_MODE + " = " + ComposeUpMode + "\r\n"
                  + "\r\n"
                  + "# The compose box's look. Picked in the dock with Settings -> Compose Box Theme.\r\n"
-                 + KEY_COMPOSE_THEME + " = " + ComposeTheme + "\r\n";
+                 + KEY_COMPOSE_THEME + " = " + ComposeTheme + "\r\n"
+                 + "\r\n"
+                 + "# How the conversation's messages are drawn, from Plain to Fancy. Picked in the dock\r\n"
+                 + "#   with Settings -> Bubble Style. A pane can have its own (Settings -> Pane Theme).\r\n"
+                 + KEY_BUBBLE_STYLE + " = " + BubbleStyle + "\r\n"
+                 + "\r\n"
+                 + "# true: every terminal hides and is replaced by its conversation with a box to write in.\r\n"
+                 + "#   The terminals keep running. Settings -> Conversation Panes switches it.\r\n"
+                 + KEY_CONVERSATION_PANES + " = " + (ConversationPanes ? "true" : "false") + "\r\n";
         }
     }
 }

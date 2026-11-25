@@ -73,7 +73,10 @@
     <Compile Include="cHistoryEntry.cs" />
     <Compile Include="cConsoleInput.cs" />
     <Compile Include="cComposeBox.cs" />
+    <Compile Include="cBubbleStyle.cs" />
     <Compile Include="cComposeTheme.cs" />
+    <Compile Include="cConversationGrid.cs" />
+    <Compile Include="cPaneThemes.cs" />
     <Compile Include="cConversationView.cs" />
     <Compile Include="cAdminSwap.cs" />
     <Compile Include="cDockSettings.cs" />

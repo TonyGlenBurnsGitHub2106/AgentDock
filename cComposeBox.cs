@@ -26,6 +26,9 @@ namespace AgentDockStandalone {
         private readonly Button  btnCopy   = new Button();
         // Full Screen (Story 6845): pressed, the panes hide and the compose box fills the dock.
         private readonly CheckBox chkFull  = new CheckBox();
+        private readonly Button  btnClear  = new Button();
+        private readonly ToolTip mtipButtons = new ToolTip();
+        private TableLayoutPanel mpnlFull;
         private readonly ComboBox cboUpMode = new ComboBox();
         private readonly Label    lblTarget = new Label();
         private readonly ComboBox cboTarget = new ComboBox();
@@ -58,13 +61,29 @@ namespace AgentDockStandalone {
         // afncPanes: the panes in order, for the Send to list. aactSetTarget: makes a pane the
         // target, the same as clicking inside it.
         public cComposeBox(Func<fAgentAbsorbedTerminal> afncTarget, Func<List<Form>> afncPanes,
-                           Action<Form> aactSetTarget, Action<string> aactStatus) {
-            mfncTarget    = afncTarget;
+                           Action<Form> aactSetTarget, Action<string> aactStatus)
+            : this(afncTarget, afncPanes, aactSetTarget, aactStatus, null) { }
+
+        // A conversation pane (Story 6846, Settings -> Conversation Panes): a box that belongs to
+        // one pane for good, standing in for its terminal. It always shows Run conversation, has
+        // its pane's name and state in a header instead of the Send to list, and no Full Screen.
+        public cComposeBox(Func<fAgentAbsorbedTerminal> afncTarget, Func<List<Form>> afncPanes,
+                           Action<Form> aactSetTarget, Action<string> aactStatus, fAgentAbsorbedTerminal afrmPane) {
+            mfrmPane      = afrmPane;
+            mfncTarget    = afrmPane == null ? afncTarget : (Func<fAgentAbsorbedTerminal>)delegate { return afrmPane; };
             mfncPanes     = afncPanes;
             mactSetTarget = aactSetTarget;
             mactStatus    = aactStatus;
             BuildLayout();
+            if (afrmPane != null) BuildCard();
+            cPaneThemes.Changed += new Action(RefreshTheme);
+            RefreshTheme();
         }
+
+        // The pane a conversation pane belongs to, or null for the dock's own compose box.
+        private readonly fAgentAbsorbedTerminal mfrmPane;
+        public fAgentAbsorbedTerminal Pane { get { return mfrmPane; } }
+        private bool IsCard { get { return mfrmPane != null; } }
 
         private void BuildLayout() {
             this.Dock    = DockStyle.Bottom;
@@ -105,12 +124,30 @@ namespace AgentDockStandalone {
                 txtPrompt.Focus();
             };
 
-            // Its own row under the buttons, so the row stays readable when the Send area is narrow.
-            Panel pnlFull = new Panel();
-            pnlFull.Dock    = DockStyle.Top;
-            pnlFull.Height  = 30;
-            pnlFull.Padding = new Padding(0, 3, 0, 0);
-            pnlFull.Controls.Add(chkFull);
+            // Clear Screen (Story 6846, Tony: "a clear button that just clears the terminal, that I
+            // can run anytime"): wipes the pane's screen and scrollback, as cls does. The agent keeps the
+            // conversation, so it is safe at any moment, even while the agent works.
+            btnClear.Text   = "Clear Screen";
+            btnClear.Dock   = DockStyle.Fill;
+            btnClear.Margin = new Padding(0);
+            btnClear.Click += delegate { ClearScreen(); };
+            mtipButtons.SetToolTip(btnClear, "Wipe the screen and scrollback of the pane in Send to, as cls does. The agent keeps its conversation.");
+
+            // Their own row under the buttons, so the row stays readable when the Send area is
+            // narrow: Full Screen and Clear Screen side by side.
+            TableLayoutPanel pnlFull = new TableLayoutPanel();
+            pnlFull.Dock        = DockStyle.Top;
+            pnlFull.Height      = 30;
+            pnlFull.Padding     = new Padding(0, 3, 0, 0);
+            pnlFull.ColumnCount = 2;
+            pnlFull.RowCount    = 1;
+            pnlFull.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            pnlFull.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            pnlFull.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            chkFull.Margin = new Padding(0, 0, 3, 0);
+            pnlFull.Controls.Add(chkFull, 0, 0);
+            pnlFull.Controls.Add(btnClear, 1, 0);
+            mpnlFull = pnlFull;
 
             // Send, Popup Answer and Copy share the top row, whatever the width.
             TableLayoutPanel tblButtons = new TableLayoutPanel();
@@ -199,9 +236,7 @@ namespace AgentDockStandalone {
             splSend.MinExtra  = 120;               // always leave the text this much
             splSend.BackColor = SystemColors.ControlDark;
             splSend.Cursor    = Cursors.VSplit;
-            splSend.SplitterMoved += delegate {
-                try { cDockSettings.SaveComposeSendWidth(pnlRight.Width); } catch { /* not remembered, no harm */ }
-            };
+            splSend.SplitterMoved += SendWidthMoved;
 
             // The left side: the text alone, or (Run conversation) the conversation over the
             // text with a bar between them. Docked from the back: the text, its bar, the view.
@@ -228,16 +263,21 @@ namespace AgentDockStandalone {
 
             tmrLive.Interval = CNST_LIVE_TICK_MS;
             tmrLive.Tick    += delegate { RefreshLive(false); };
-            ApplyTheme(cComposeTheme.Named(cDockSettings.ComposeTheme));
 
             tmrTarget.Interval = 400;
             tmrTarget.Tick    += delegate {
                 ShowTarget();
                 FollowTarget();
+                RefreshTheme();            // another pane may have its own theme
                 if (++mintTicks % CNST_SAMPLE_EVERY_TICKS == 0) SampleTabColors();
                 if (mintTicks % CNST_STATE_EVERY_TICKS == 0) CheckAgentState();
             };
             cboTarget.DropDown += delegate { SampleTabColors(); };
+        }
+
+        // The dock's own box remembers the Send area's width. A conversation pane does not.
+        private void SendWidthMoved(object sender, SplitterEventArgs e) {
+            try { cDockSettings.SaveComposeSendWidth(pnlRight.Width); } catch { /* not remembered, no harm */ }
         }
 
         // Shows or hides the box. Hidden, it does nothing at all.
@@ -302,8 +342,9 @@ namespace AgentDockStandalone {
             }
             pnlLeft.ResumeLayout(true);
             if (blnLive) {
-                // A conversation needs room: a short box grows, and goes back when this is turned off.
-                if (this.Height < CNST_LIVE_MIN_HEIGHT) {
+                // A conversation needs room: a short box grows, and goes back when this is turned
+                // off. A conversation pane fills its cell and never grows.
+                if (!IsCard && this.Height < CNST_LIVE_MIN_HEIGHT) {
                     mintHeightBeforeLive = this.Height;
                     this.Height = CNST_LIVE_MIN_HEIGHT;
                 }
@@ -360,7 +401,9 @@ namespace AgentDockStandalone {
                 List<cHistoryEntry> lst = null;
                 try { lst = cAgentHistory.ConversationForPids(lstFor, CNST_CONVERSATION_MAX); } catch (Exception) { lst = null; }
                 try {
-                    if (this.IsDisposed || !this.IsHandleCreated) return;
+                    // No window yet (a conversation pane read before it was placed): never leave
+                    // the load marked running, or the view would wait for it forever (1.0.40).
+                    if (this.IsDisposed || !this.IsHandleCreated) { mblnLiveLoading = false; return; }
                     this.BeginInvoke(new MethodInvoker(delegate {
                         mblnLiveLoading = false;
                         if (!mblnLive) return;                           // turned off meanwhile
@@ -403,9 +446,28 @@ namespace AgentDockStandalone {
 
         // ------------------------------------------------------------ themes
 
+        // The look of the pane being shown (Story 6846): its own theme and bubble style when it
+        // has them (cPaneThemes), else the dock's. Called when any theme changes and when the
+        // box moves to another pane. Painting again only when something changed.
+        private cBubbleStyle mStyle = cBubbleStyle.Named(cBubbleStyle.CNST_DEFAULT);
+        private string mstrThemeKey;
+
+        public void RefreshTheme() {
+            if (this.IsDisposed) return;
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            IntPtr hwnd = pane == null ? IntPtr.Zero : pane.AbsorbedHwnd;
+            cComposeTheme theme = cPaneThemes.ThemeFor(hwnd);
+            cBubbleStyle  style = cPaneThemes.StyleFor(hwnd);
+            string strKey = theme.Name + "|" + style.Name;
+            if (strKey == mstrThemeKey) return;
+            mstrThemeKey = strKey;
+            mStyle = style;
+            ApplyTheme(theme);
+        }
+
         // Paints the box in a theme (Story 6845, Settings -> Compose Box Theme). Windows puts
         // every control back in its system colors.
-        public void ApplyTheme(cComposeTheme aTheme) {
+        private void ApplyTheme(cComposeTheme aTheme) {
             mTheme = aTheme;
             bool blnSys = aTheme.IsSystem;
             this.BackColor        = blnSys ? SystemColors.Control : aTheme.Back;
@@ -416,7 +478,7 @@ namespace AgentDockStandalone {
             txtPrompt.ForeColor   = blnSys ? SystemColors.WindowText : aTheme.InputFore;
             txtPrompt.BorderStyle = blnSys ? BorderStyle.Fixed3D : BorderStyle.FixedSingle;
             lblTarget.ForeColor   = blnSys ? SystemColors.GrayText : aTheme.Caption;
-            foreach (Button b in new Button[] { btnSend, btnAnswer, btnCopy }) {
+            foreach (Button b in new Button[] { btnSend, btnAnswer, btnCopy, btnClear }) {
                 if (blnSys) {
                     b.FlatStyle = FlatStyle.Standard;
                     b.BackColor = SystemColors.Control;
@@ -452,7 +514,8 @@ namespace AgentDockStandalone {
             Color clrBar = blnSys ? SystemColors.ControlDark : aTheme.Border;
             splSend.BackColor   = clrBar;
             splPrompt.BackColor = clrBar;
-            vwLive.ApplyTheme(aTheme);
+            vwLive.ApplyTheme(aTheme, mStyle);
+            if (IsCard) PaintHeader();
             cComposeTheme.ThemeScrollBars(txtPrompt, aTheme);
             this.Invalidate(true);
         }
@@ -629,6 +692,7 @@ namespace AgentDockStandalone {
         private List<cHistoryEntry> mlstBrowse = new List<cHistoryEntry>();
 
         private eUpMode UpMode() {
+            if (IsCard) return eUpMode.Live;       // a conversation pane always shows the conversation
             return (eUpMode)Math.Max(0, cboUpMode.SelectedIndex);
         }
 
@@ -763,8 +827,121 @@ namespace AgentDockStandalone {
             if (mlstHistory.Count > CNST_HISTORY_MAX) mlstHistory.RemoveAt(0);
         }
 
+        // Clear Screen: wipes the screen of the pane in Send to (cConsoleInput.ClearScreen).
+        private void ClearScreen() {
+            fAgentAbsorbedTerminal pane = mfncTarget();
+            if (pane == null) {
+                mactStatus("Pick a pane in Send to (or click inside one) first.");
+                return;
+            }
+            string strProblem = cConsoleInput.ClearScreen(pane.AbsorbedHwnd);
+            mactStatus(strProblem == null
+                ? "Cleared the screen of " + pane.Text + ". The agent keeps its conversation. Its prompt line comes back when you type or it next writes."
+                : "Not cleared: " + strProblem);
+            txtPrompt.Focus();
+        }
+
+        // ------------------------------------------------------------ conversation pane
+
+        // The header of a conversation pane: its number and name on its tab's color, and what its
+        // agent is doing at the right. Right-click it (or use the Theme button) for the pane's look.
+        private readonly Panel  pnlHeader  = new Panel();
+        private readonly Label  lblHeader  = new Label();
+        private readonly Label  lblState   = new Label();
+        private readonly Button btnTheme   = new Button();
+        private int    mintCardState = -1;
+
+        // Raised when a conversation pane's Theme button or header is right-clicked, with where the
+        // menu goes. The dock builds the menu (the same one as Settings -> Pane Theme).
+        public event Action<cComposeBox, Control, Point> ThemeMenuWanted;
+
+        // The pane's place in the order, for the header ("2. Pane title").
+        public int Number { get { return mintNumber; } set { mintNumber = value; PaintHeader(); } }
+        private int mintNumber;
+
+        private void BuildCard() {
+            this.Dock    = DockStyle.Fill;
+            this.Height  = 200;
+            this.Padding = new Padding(3);
+            pnlLabelRow.Visible = false;
+            cboTarget.Visible   = false;
+            chkFull.Visible     = false;
+            mpnlFull.ColumnStyles[0].Width = 0F;     // Clear Screen gets the whole row
+            mpnlFull.ColumnStyles[1].Width = 100F;
+            splSend.SplitterMoved -= SendWidthMoved;
+            pnlRight.Width = Math.Min(pnlRight.Width, 200);
+
+            pnlHeader.Dock    = DockStyle.Top;
+            pnlHeader.Height  = 26;
+            pnlHeader.Padding = new Padding(6, 0, 2, 0);
+            lblHeader.Dock      = DockStyle.Fill;
+            lblHeader.TextAlign = ContentAlignment.MiddleLeft;
+            lblHeader.AutoEllipsis = true;
+            lblHeader.Font      = new Font("Segoe UI", 9F, FontStyle.Bold);
+            lblState.Dock       = DockStyle.Right;
+            lblState.AutoSize   = false;
+            lblState.Width      = 86;
+            lblState.TextAlign  = ContentAlignment.MiddleCenter;
+            lblState.Font       = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            btnTheme.Text       = "Theme";
+            btnTheme.Dock       = DockStyle.Right;
+            btnTheme.Width      = 62;
+            btnTheme.FlatStyle  = FlatStyle.Flat;
+            btnTheme.FlatAppearance.BorderSize = 0;
+            btnTheme.Font       = new Font("Segoe UI", 8.25F);
+            mtipButtons.SetToolTip(btnTheme, "This pane's own colors and bubbles, or the dock's.");
+            btnTheme.Click += delegate {
+                if (ThemeMenuWanted != null) ThemeMenuWanted(this, btnTheme, new Point(0, btnTheme.Height));
+            };
+            MouseEventHandler rightClick = delegate(object o, MouseEventArgs e) {
+                if (e.Button == MouseButtons.Right && ThemeMenuWanted != null) ThemeMenuWanted(this, (Control)o, e.Location);
+            };
+            lblHeader.MouseUp += rightClick;
+            pnlHeader.MouseUp += rightClick;
+            pnlHeader.Controls.Add(lblHeader);
+            pnlHeader.Controls.Add(btnTheme);
+            pnlHeader.Controls.Add(lblState);
+            this.Controls.Add(pnlHeader);           // docked last of all: across the top
+
+            // Writing in a conversation pane makes its pane the dock's current one, so the Agents
+            // menu (Close Active Pane, Unparent Active Pane) acts on it.
+            txtPrompt.Enter += delegate { mactSetTarget(mfrmPane); };
+            AgentStateChanged += delegate(string astrText, int aintState) { mintCardState = aintState; PaintHeader(); };
+            PaintHeader();
+        }
+
+        private void PaintHeader() {
+            if (!IsCard) return;
+            Color clrTab = cPaneColors.ColorOf(mfrmPane.AbsorbedHwnd);
+            Color clrBack = clrTab.IsEmpty ? (mTheme.IsSystem ? SystemColors.ControlDark : mTheme.Border) : clrTab;
+            double dblLight = 0.299 * clrBack.R + 0.587 * clrBack.G + 0.114 * clrBack.B;
+            Color clrText = dblLight > 150 ? Color.Black : Color.White;
+            pnlHeader.BackColor = clrBack;
+            lblHeader.ForeColor = clrText;
+            btnTheme.BackColor  = clrBack;
+            btnTheme.ForeColor  = clrText;
+            btnTheme.FlatAppearance.MouseOverBackColor = Blend(clrBack, clrText, 0.2);
+            string strTitle = (mintNumber > 0 ? mintNumber + ". " : "") + (mfrmPane.IsDisposed ? "" : mfrmPane.Text);
+            if (lblHeader.Text != strTitle) lblHeader.Text = strTitle;
+            lblState.Visible   = mintCardState >= 0;
+            lblState.Text      = mintCardState == 1 ? "Thinking..." : "Idle";
+            lblState.BackColor = mintCardState == 1 ? Color.FromArgb(255, 214, 120) : Color.FromArgb(170, 225, 170);
+            lblState.ForeColor = Color.Black;
+        }
+
+        // Called by the dock about once a second: the pane's title and tab color may have changed.
+        public void RefreshHeader() {
+            if (IsCard) PaintHeader();
+        }
+
+        // Puts the keyboard in this pane's text box.
+        public void FocusText() { txtPrompt.Focus(); }
+
         protected override void Dispose(bool ablnDisposing) {
-            if (ablnDisposing) { tmrTarget.Dispose(); tmrLive.Dispose(); }
+            if (ablnDisposing) {
+                cPaneThemes.Changed -= new Action(RefreshTheme);
+                tmrTarget.Dispose(); tmrLive.Dispose(); mtipButtons.Dispose();
+            }
             base.Dispose(ablnDisposing);
         }
     }

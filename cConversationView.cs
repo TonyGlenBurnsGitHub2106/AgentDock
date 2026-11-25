@@ -51,11 +51,25 @@ namespace AgentDockStandalone {
         }
 
         public void ApplyTheme(cComposeTheme aTheme) {
+            ApplyTheme(aTheme, mStyle);
+        }
+
+        // The colors and the bubble style (Story 6846). A new style can change every bubble's
+        // size (Plain is full width, a tail takes room), so the view is laid out again.
+        public void ApplyTheme(cComposeTheme aTheme, cBubbleStyle aStyle) {
             mTheme = aTheme;
+            bool blnNewStyle = aStyle != mStyle;
+            mStyle = aStyle ?? cBubbleStyle.Named(cBubbleStyle.CNST_DEFAULT);
             this.BackColor = aTheme.IsSystem ? SystemColors.Window : aTheme.InputBack;
             cComposeTheme.ThemeScrollBars(this, aTheme);
+            if (blnNewStyle) Relayout();
             Invalidate();
         }
+
+        private cBubbleStyle mStyle = cBubbleStyle.Named(cBubbleStyle.CNST_DEFAULT);
+        private const int CNST_TAIL   = 8;     // how far a tail sticks out from its bubble
+        private const int CNST_BAR    = 4;     // Plain: the bar at the left of each row
+        private const int CNST_SHADOW = 3;     // how far a shadow falls
 
         // A line shown in the middle when there is nothing to show ("Pick a pane ...").
         public void SetMessage(string astrMessage) {
@@ -135,7 +149,13 @@ namespace AgentDockStandalone {
             mHover = null;
             int intWidth = Math.Max(120, this.ClientSize.Width);
             mintLaidOutWidth = this.ClientSize.Width;
-            int intMaxBubble = Math.Max(80, (int)(intWidth * 0.82) - CNST_MARGIN);
+            // Plain rows run the full width. A tail takes room at the speaker's side.
+            bool blnFlat = mStyle.Flat;
+            int intSide  = CNST_MARGIN + (mStyle.Tail ? CNST_TAIL : 0);
+            int intMaxBubble = blnFlat ? Math.Max(80, intWidth - 2 * CNST_MARGIN)
+                                       : Math.Max(80, (int)(intWidth * 0.82) - intSide);
+            int intLeftPad = blnFlat ? CNST_PAD + CNST_BAR : CNST_PAD;   // Plain: room for the bar
+            int intGap = CNST_GAP + (mStyle.Shadow ? CNST_SHADOW : 0);
             int intCaptionH  = mfntCaption.Height;
             int y = CNST_MARGIN;
             TextFormatFlags flags = TextFlags();
@@ -147,15 +167,16 @@ namespace AgentDockStandalone {
                 prev = entry;
                 b.Shown = Shorten(entry.Text);
                 Size szText = TextRenderer.MeasureText(b.Shown, this.Font,
-                    new Size(intMaxBubble - 2 * CNST_PAD, Int32.MaxValue), flags);
-                int w = Math.Max(60, Math.Min(intMaxBubble, szText.Width + 2 * CNST_PAD));
+                    new Size(intMaxBubble - intLeftPad - CNST_PAD, Int32.MaxValue), flags);
+                int w = blnFlat ? intMaxBubble : Math.Max(60, Math.Min(intMaxBubble, szText.Width + intLeftPad + CNST_PAD));
                 int h = szText.Height + 2 * CNST_PAD;
-                int x = entry.IsAnswer ? CNST_MARGIN : intWidth - CNST_MARGIN - w;
-                b.CaptionAt = new Point(entry.IsAnswer ? x + 4 : x + w - 4, y);
+                int x = blnFlat || entry.IsAnswer ? intSide : intWidth - intSide - w;
+                if (blnFlat) x = CNST_MARGIN;
+                b.CaptionAt = new Point(blnFlat ? x + intLeftPad : (entry.IsAnswer ? x + 4 : x + w - 4), y);
                 if (b.ShowCaption) y += intCaptionH + 2;
-                else y -= CNST_GAP / 2;             // the same speaker again: closer together
+                else y -= intGap / 2;               // the same speaker again: closer together
                 b.Box = new Rectangle(x, y, w, h);
-                y += h + CNST_GAP;
+                y += h + intGap;
                 mlstBubbles.Add(b);
             }
             this.AutoScrollMinSize = new Size(0, mlstBubbles.Count == 0 ? 0 : y);
@@ -201,24 +222,107 @@ namespace AgentDockStandalone {
                 Color clrFill = blnAnswer ? mTheme.AnswerFill : mTheme.PromptFill;
                 Color clrEdge = blnAnswer ? mTheme.AnswerEdge : mTheme.PromptEdge;
                 Color clrText = blnAnswer ? mTheme.AnswerText : mTheme.PromptText;
-                int intRadius = blnAnswer ? CNST_ANSWER_RADIUS : CNST_PROMPT_RADIUS;
+                int intRadius = blnAnswer ? mStyle.AnswerRadius : mStyle.PromptRadius;
+                bool blnHover = b == mHover;
 
                 if (b.ShowCaption) {
                     string strCaption = blnAnswer ? "Agent" : "You";
                     Size szCap = TextRenderer.MeasureText(strCaption, mfntCaption);
-                    int xCap = blnAnswer ? b.CaptionAt.X : b.CaptionAt.X - szCap.Width;
+                    int xCap = blnAnswer || mStyle.Flat ? b.CaptionAt.X : b.CaptionAt.X - szCap.Width;
                     TextRenderer.DrawText(g, strCaption, mfntCaption, new Point(xCap, b.CaptionAt.Y + intDy), mTheme.Caption);
                 }
 
-                using (GraphicsPath path = Rounded(rc, intRadius))
-                using (SolidBrush br = new SolidBrush(clrFill))
-                using (Pen pen = new Pen(clrEdge, b == mHover ? 2.5F : 1.25F)) {
-                    g.FillPath(br, path);
-                    g.DrawPath(pen, path);
+                if (mStyle.Flat) {
+                    // Plain: no bubble. A bar in the speaker's color at the left, and a faint
+                    // band behind the row only while the mouse is over it.
+                    if (blnHover) using (SolidBrush brHover = new SolidBrush(Color.FromArgb(28, clrEdge))) g.FillRectangle(brHover, rc);
+                    using (SolidBrush brBar = new SolidBrush(clrEdge)) g.FillRectangle(brBar, rc.X, rc.Y, CNST_BAR, rc.Height);
+                    clrText = this.ForeColorFor();
+                } else {
+                    PaintBubble(g, rc, intRadius, blnAnswer, clrFill, clrEdge, blnHover);
+                    if (!mStyle.Fill) clrText = this.ForeColorFor();
                 }
-                Rectangle rcText = Rectangle.Inflate(rc, -CNST_PAD, -CNST_PAD);
+                Rectangle rcText = new Rectangle(rc.X + (mStyle.Flat ? CNST_PAD + CNST_BAR : CNST_PAD), rc.Y + CNST_PAD,
+                    rc.Width - (mStyle.Flat ? 2 * CNST_PAD + CNST_BAR : 2 * CNST_PAD), rc.Height - 2 * CNST_PAD);
                 TextRenderer.DrawText(g, b.Shown, this.Font, rcText, clrText, TextFlags());
             }
+        }
+
+        // Text with no bubble color behind it (Plain, Outline) reads in the view's own text color.
+        private Color ForeColorFor() {
+            return mTheme.IsSystem ? SystemColors.WindowText : mTheme.InputFore;
+        }
+
+        // One bubble in the current style: shadow, fill (plain or shaded), tail and outline.
+        private void PaintBubble(Graphics g, Rectangle rc, int aintRadius, bool ablnAnswer,
+                                 Color aclrFill, Color aclrEdge, bool ablnHover) {
+            using (GraphicsPath path = BubblePath(rc, aintRadius, ablnAnswer)) {
+                if (mStyle.Shadow) {
+                    using (Matrix m = new Matrix()) {
+                        // Two soft layers, the farther one fainter.
+                        for (int i = 2; i >= 1; i--) {
+                            using (GraphicsPath shadow = (GraphicsPath)path.Clone()) {
+                                m.Reset();
+                                m.Translate(i * CNST_SHADOW / 2F, i * CNST_SHADOW / 1.5F);
+                                shadow.Transform(m);
+                                using (SolidBrush brShadow = new SolidBrush(Color.FromArgb(mTheme.IsDark ? 70 : 34, Color.Black)))
+                                    g.FillPath(brShadow, shadow);
+                            }
+                        }
+                    }
+                }
+                if (mStyle.Fill) {
+                    if (mStyle.Gradient) {
+                        Rectangle rcGrad = new Rectangle(rc.X, rc.Y - 1, rc.Width, rc.Height + 2);
+                        using (LinearGradientBrush brGrad = new LinearGradientBrush(rcGrad,
+                            Blend(aclrFill, Color.White, mTheme.IsDark ? 0.10 : 0.55), aclrFill, LinearGradientMode.Vertical))
+                            g.FillPath(brGrad, path);
+                    } else {
+                        using (SolidBrush br = new SolidBrush(aclrFill)) g.FillPath(br, path);
+                    }
+                }
+                float fltEdge = mStyle.EdgeWidth;
+                if (ablnHover) fltEdge = Math.Max(2.5F, fltEdge + 1F);   // the bubble under the mouse stands out
+                if (fltEdge > 0) using (Pen pen = new Pen(aclrEdge, fltEdge)) g.DrawPath(pen, path);
+            }
+        }
+
+        private static Color Blend(Color a, Color b, double adblB) {
+            return Color.FromArgb((int)(a.R + (b.R - a.R) * adblB), (int)(a.G + (b.G - a.G) * adblB), (int)(a.B + (b.B - a.B) * adblB));
+        }
+
+        // The bubble's outline: a rounded (or square) box, with a tail at the bottom corner on the
+        // speaker's side when the style has one (answers at the left, your prompts at the right).
+        private GraphicsPath BubblePath(Rectangle arc, int aintRadius, bool ablnAnswer) {
+            if (!mStyle.Tail) return aintRadius > 0 ? Rounded(arc, aintRadius) : Square(arc);
+            int d = Math.Max(2, Math.Min(aintRadius * 2, Math.Min(arc.Width, arc.Height)));
+            int t = CNST_TAIL;
+            GraphicsPath p = new GraphicsPath();
+            if (ablnAnswer) {
+                // Clockwise from the top left. The bottom left corner is the tail.
+                p.AddArc(arc.X, arc.Y, d, d, 180, 90);
+                p.AddArc(arc.Right - d, arc.Y, d, d, 270, 90);
+                p.AddArc(arc.Right - d, arc.Bottom - d, d, d, 0, 90);
+                p.AddLine(arc.Right - d / 2, arc.Bottom, arc.X - t, arc.Bottom);
+                p.AddLine(arc.X - t, arc.Bottom, arc.X, arc.Bottom - t);
+                p.AddLine(arc.X, arc.Bottom - t, arc.X, arc.Y + d / 2);
+            } else {
+                // Clockwise from the top left. The bottom right corner is the tail.
+                p.AddArc(arc.X, arc.Y, d, d, 180, 90);
+                p.AddArc(arc.Right - d, arc.Y, d, d, 270, 90);
+                p.AddLine(arc.Right, arc.Y + d / 2, arc.Right, arc.Bottom - t);
+                p.AddLine(arc.Right, arc.Bottom - t, arc.Right + t, arc.Bottom);
+                p.AddLine(arc.Right + t, arc.Bottom, arc.X + d / 2, arc.Bottom);
+                p.AddArc(arc.X, arc.Bottom - d, d, d, 90, 90);
+            }
+            p.CloseFigure();
+            return p;
+        }
+
+        private static GraphicsPath Square(Rectangle arc) {
+            GraphicsPath p = new GraphicsPath();
+            p.AddRectangle(arc);
+            return p;
         }
 
         private static GraphicsPath Rounded(Rectangle arc, int aintRadius) {

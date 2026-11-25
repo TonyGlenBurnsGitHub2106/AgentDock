@@ -119,15 +119,132 @@ namespace AgentDockStandalone {
 
             // Docking runs from the back of the z-order to the front: the menu and status bar stay
             // outermost, then the compose box, its bar, and the pane area fills what is left.
+            // Conversation panes (Story 6846): fills the pane area in place of the terminals.
+            mGrid = new cConversationGrid(
+                delegate { return mPanes == null ? new List<Form>() : mPanes.OrderedPanes(); },
+                delegate(Form f) { if (mPanes != null) mPanes.SetCurrentPane(f); },
+                delegate(string s) { this.tslStatus.Text = s; },
+                delegate(cComposeBox card, Control ctl, Point pt) {
+                    ContextMenuStrip cms = new ContextMenuStrip();
+                    FillPaneThemeMenu(cms.Items, card.Pane);
+                    cms.Closed += delegate { this.BeginInvoke(new MethodInvoker(cms.Dispose)); };
+                    cms.Show(ctl, pt);
+                });
+            this.Controls.Add(mGrid);
+
             MdiClient mdi = null;
             foreach (Control c in this.Controls) { if (c is MdiClient) mdi = (MdiClient)c; }
             if (mdi != null) {
-                this.Controls.SetChildIndex(mdi, 0);
-                this.Controls.SetChildIndex(msplCompose, 1);
-                this.Controls.SetChildIndex(mCompose, 2);
+                this.Controls.SetChildIndex(mGrid, 0);
+                this.Controls.SetChildIndex(mdi, 1);
+                this.Controls.SetChildIndex(msplCompose, 2);
+                this.Controls.SetChildIndex(mCompose, 3);
             }
             mCompose.SetShown(cDockSettings.ShowComposeBox);
             msplCompose.Visible = mCompose.Visible;
+        }
+
+        private cConversationGrid mGrid;
+        private bool              mblnConversationPanes;
+
+        // Conversation panes on or off (Story 6846). On: the terminals' area and the dock's own
+        // compose box hide, and every terminal is shown as its conversation with a box to write
+        // in. The terminals keep running. Off: back as before.
+        private void ApplyConversationPanes(bool ablnOn) {
+            if (mnuConversationPanes != null) mnuConversationPanes.Checked = ablnOn;
+            if (ablnOn == mblnConversationPanes) return;
+            mblnConversationPanes = ablnOn;
+            MdiClient mdi = null;
+            foreach (Control c in this.Controls) { if (c is MdiClient) mdi = (MdiClient)c; }
+            this.SuspendLayout();
+            if (ablnOn) {
+                mCompose.LeaveFullScreen();
+                mCompose.SetShown(false);
+                msplCompose.Visible = false;
+                if (mdi != null) mdi.Visible = false;
+                mGrid.SetShown(true);
+            } else {
+                mGrid.SetShown(false);
+                if (mdi != null) mdi.Visible = true;
+                mCompose.SetShown(cDockSettings.ShowComposeBox);
+                msplCompose.Visible = mCompose.Visible;
+            }
+            this.ResumeLayout(true);
+            if (!ablnOn && mPanes != null) mPanes.ReTile();
+            if (ablnOn) mGrid.FocusPane(mPanes == null ? null : mPanes.CurrentPane());
+        }
+
+        private void ToggleConversationPanes() {
+            bool blnOn = !mblnConversationPanes;
+            string strProblem = null;
+            try { cDockSettings.SaveConversationPanes(blnOn); } catch (Exception ex) { strProblem = ex.Message; }
+            ApplyConversationPanes(blnOn);
+            this.tslStatus.Text = (blnOn
+                    ? "Conversation panes: each terminal shows as its conversation. The terminals keep running."
+                    : "The terminals are back.")
+                + (strProblem == null ? "" : " Not remembered: " + strProblem);
+        }
+
+        private ToolStripMenuItem mnuConversationPanes;
+
+        // The Pane Theme menu for one pane (Story 6846): follow the dock, or its own colors, its
+        // own bubbles, or both. Used by Settings -> Pane Theme (for the current pane) and by a
+        // conversation pane's Theme button and header.
+        private void FillPaneThemeMenu(ToolStripItemCollection aItems, fAgentAbsorbedTerminal apane) {
+            aItems.Clear();
+            if (apane == null || apane.IsDisposed) {
+                ToolStripMenuItem miNone = new ToolStripMenuItem("Click inside a pane first, or pick it in Send to");
+                miNone.Enabled = false;
+                aItems.Add(miNone);
+                return;
+            }
+            IntPtr hwnd = apane.AbsorbedHwnd;
+            string strTheme = cPaneThemes.ThemeOverride(hwnd);
+            string strStyle = cPaneThemes.StyleOverride(hwnd);
+            ToolStripMenuItem miFor = new ToolStripMenuItem("For " + apane.Text);
+            miFor.Enabled = false;
+            aItems.Add(miFor);
+            ToolStripMenuItem miDock = new ToolStripMenuItem("Use the Dock's Theme");
+            miDock.ToolTipText = "Drop this pane's own colors and bubbles: it follows Settings -> Compose Box Theme and Bubble Style.";
+            miDock.Checked = strTheme == null && strStyle == null;
+            miDock.Click += delegate { SayThemeSaved(cPaneThemes.Clear(hwnd), apane.Text + " follows the dock's theme again."); };
+            aItems.Add(miDock);
+            aItems.Add(new ToolStripSeparator());
+
+            ToolStripMenuItem miColors = new ToolStripMenuItem("&Colors");
+            ToolStripMenuItem miColorsDock = new ToolStripMenuItem("The Dock's (" + cDockSettings.ComposeTheme + ")");
+            miColorsDock.Checked = strTheme == null;
+            miColorsDock.Click += delegate { SayThemeSaved(cPaneThemes.SetTheme(hwnd, null), apane.Text + ": the dock's colors."); };
+            miColors.DropDownItems.Add(miColorsDock);
+            miColors.DropDownItems.Add(new ToolStripSeparator());
+            foreach (cComposeTheme t in cComposeTheme.All) {
+                string strName = t.Name;
+                ToolStripMenuItem mi = new ToolStripMenuItem(strName);
+                mi.Checked = strTheme == strName;
+                mi.Click += delegate { SayThemeSaved(cPaneThemes.SetTheme(hwnd, strName), apane.Text + ": " + strName + " colors."); };
+                miColors.DropDownItems.Add(mi);
+            }
+            aItems.Add(miColors);
+
+            ToolStripMenuItem miBubbles = new ToolStripMenuItem("&Bubbles");
+            ToolStripMenuItem miBubblesDock = new ToolStripMenuItem("The Dock's (" + cDockSettings.BubbleStyle + ")");
+            miBubblesDock.Checked = strStyle == null;
+            miBubblesDock.Click += delegate { SayThemeSaved(cPaneThemes.SetStyle(hwnd, null), apane.Text + ": the dock's bubbles."); };
+            miBubbles.DropDownItems.Add(miBubblesDock);
+            miBubbles.DropDownItems.Add(new ToolStripSeparator());
+            foreach (cBubbleStyle s in cBubbleStyle.All) {
+                string strName = s.Name;
+                ToolStripMenuItem mi = new ToolStripMenuItem(strName);
+                mi.ToolTipText = s.Description;
+                mi.Checked = strStyle == strName;
+                mi.Click += delegate { SayThemeSaved(cPaneThemes.SetStyle(hwnd, strName), apane.Text + ": " + strName + " bubbles."); };
+                miBubbles.DropDownItems.Add(mi);
+            }
+            aItems.Add(miBubbles);
+        }
+
+        private void SayThemeSaved(string astrProblem, string astrDone) {
+            this.tslStatus.Text = astrDone + (astrProblem == null ? "" : " Not remembered: " + astrProblem);
         }
 
         private Splitter msplCompose;
@@ -170,6 +287,8 @@ namespace AgentDockStandalone {
                 ReTileIfMultiple();
                 UpdateStatus();
             }
+            // Conversation panes were on when the dock last closed (Story 6846).
+            if (cDockSettings.ConversationPanes) ApplyConversationPanes(true);
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e) {
@@ -845,7 +964,24 @@ namespace AgentDockStandalone {
             mnuShowCompose.Checked = cDockSettings.ShowComposeBox;
             mnuShowCompose.Click += delegate { ToggleComposeBox(); };
             mnuSettings.DropDownItems.Add(mnuShowCompose);
+            // Conversation Panes (Story 6846): the terminals hide, each shown as its conversation.
+            mnuConversationPanes = new ToolStripMenuItem("Con&versation Panes");
+            mnuConversationPanes.ToolTipText = "Hide the terminals and show each one as its conversation, with a box to write in. The terminals keep running. Remembered.";
+            mnuConversationPanes.Checked = cDockSettings.ConversationPanes;
+            mnuConversationPanes.Click += delegate { ToggleConversationPanes(); };
+            mnuSettings.DropDownItems.Add(mnuConversationPanes);
             mnuSettings.DropDownItems.Add(BuildThemeMenu());
+            mnuSettings.DropDownItems.Add(BuildBubbleStyleMenu());
+            // Pane Theme: the current pane's own look, built fresh each time it opens.
+            ToolStripMenuItem mnuPaneTheme = new ToolStripMenuItem("&Pane Theme");
+            mnuPaneTheme.ToolTipText = "Give the current pane its own colors or bubbles, or let it follow the dock's.";
+            mnuPaneTheme.DropDownItems.Add(new ToolStripMenuItem("..."));   // so the arrow shows
+            mnuPaneTheme.DropDownOpening += delegate {
+                Form pane = mPanes == null ? null : mPanes.CurrentPane();
+                if (pane == null && this.MdiChildren != null && this.MdiChildren.Length == 1) pane = this.MdiChildren[0];
+                FillPaneThemeMenu(mnuPaneTheme.DropDownItems, pane as fAgentAbsorbedTerminal);
+            };
+            mnuSettings.DropDownItems.Add(mnuPaneTheme);
             mnuSettings.DropDownItems.Add(new ToolStripSeparator());
             mnuSettings.DropDownItems.Add(mnuEdit);
             mnuSettings.DropDownItems.Add(mnuFolder);
@@ -897,14 +1033,40 @@ namespace AgentDockStandalone {
                         ToolStripMenuItem m = o as ToolStripMenuItem;
                         if (m != null) m.Checked = m == mi;
                     }
-                    mCompose.ApplyTheme(theme);
-                    this.tslStatus.Text = "Compose box theme: " + theme.Name + "."
+                    cPaneThemes.RaiseChanged();
+                    this.tslStatus.Text = "Compose box theme: " + theme.Name + " (panes with their own theme keep it)."
                         + (strProblem == null ? "" : " Not remembered: " + strProblem)
-                        + (mCompose.Visible ? "" : " Turn on Show Compose Box to see it.");
+                        + (mCompose.Visible || mblnConversationPanes ? "" : " Turn on Show Compose Box to see it.");
                 };
                 mnuTheme.DropDownItems.Add(mi);
             }
             return mnuTheme;
+        }
+
+        // Settings -> Bubble Style (Story 6846): how every pane's conversation draws its messages,
+        // from Plain to Fancy, unless a pane has its own (Pane Theme). Remembered (BubbleStyle).
+        private ToolStripMenuItem BuildBubbleStyleMenu() {
+            ToolStripMenuItem mnuStyle = new ToolStripMenuItem("&Bubble Style");
+            mnuStyle.ToolTipText = "How the conversation's messages look, from Plain to Fancy. Remembered.";
+            foreach (cBubbleStyle s in cBubbleStyle.All) {
+                cBubbleStyle style = s;
+                ToolStripMenuItem mi = new ToolStripMenuItem(style.Name);
+                mi.ToolTipText = style.Description;
+                mi.Checked = style.Name == cDockSettings.BubbleStyle;
+                mi.Click += delegate {
+                    string strProblem = null;
+                    try { cDockSettings.SaveBubbleStyle(style.Name); } catch (Exception ex) { strProblem = ex.Message; }
+                    foreach (ToolStripItem o in mnuStyle.DropDownItems) {
+                        ToolStripMenuItem m = o as ToolStripMenuItem;
+                        if (m != null) m.Checked = m == mi;
+                    }
+                    cPaneThemes.RaiseChanged();
+                    this.tslStatus.Text = "Bubble style: " + style.Name + ". " + style.Description
+                        + (strProblem == null ? "" : " Not remembered: " + strProblem);
+                };
+                mnuStyle.DropDownItems.Add(mi);
+            }
+            return mnuStyle;
         }
 
         // Settings -> Show Compose Box: flips the setting, saves it and shows or hides the box at once.
@@ -923,6 +1085,8 @@ namespace AgentDockStandalone {
 
         private void ApplyComposeBox(bool ablnShow) {
             mnuShowCompose.Checked = ablnShow;
+            // Conversation panes hide the dock's own box: the setting is kept for when they end.
+            if (mblnConversationPanes) return;
             if (mCompose.Visible == ablnShow) return;
             mCompose.SetShown(ablnShow);
             if (mPanes != null) mPanes.ReTile();
