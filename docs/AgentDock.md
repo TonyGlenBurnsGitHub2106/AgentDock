@@ -219,10 +219,11 @@ to the end).
   other way. The dock remembers the height.
 - **The bar between the text and Send** sets how much room each gets: drag it left for a wider
   Send to list, right for more text. The dock remembers the width.
-- **The thin strip at the box's right edge** folds the Send area away: click **>** and the text
-  and conversation take the whole width, click **<** to bring it back. Enter still sends while it is
-  folded. The dock remembers it, and each conversation pane remembers its own (its header's Hide
-  Send / Show Send does the same).
+- **The thin strip at the box's right edge** hides the options (Send, Popup Answer, Copy, Full
+  Screen, Clear Screen, Send to): click **>** and the text and conversation take the whole width,
+  click **<** to bring them back. Enter still sends while they are hidden. The dock remembers it,
+  and each conversation pane remembers its own (its header's Hide Options / Show Options does the
+  same).
 - **Send to**, under **Send**, lists the panes and shows which one the prompt goes to. It follows
   the pane you click in. Pick a different pane in the list to send there instead.
   Each pane is listed by its terminal's title, so renaming a tab in Windows Terminal renames
@@ -253,8 +254,9 @@ pane's number and name on its tab's color and **Thinking...** or **Idle**, and h
   on the header opens the same menu).
 - **Use Global**: shows while the pane has a look of its own. One click puts its place back on the
   global look.
-- **Hide Send / Show Send**: hides the Send area at the right of that pane for more room, and
-  shows it again. Enter still sends. Remembered for that pane's place.
+- **Hide Options / Show Options**: hides the column of options at the right of that pane (Send,
+  Popup, Copy, Clear) for more room, and shows it again. Enter still sends. Remembered for that
+  pane's place. The **>** strip at the pane's right edge does the same.
 
 **The Window menu lays them out** as it does the terminals: Tile Vertical, Tile Horizontal,
 Cascade, Quadrant Layout, and Maximize / Restore Pane (the pane you last wrote in fills the dock).

@@ -515,9 +515,9 @@ namespace AgentDockStandalone {
             mblnSendHidden   = ablnHide;
             pnlRight.Visible = !ablnHide;
             splSend.Visible  = !ablnHide;
-            btnSendArea.Text = ablnHide ? "Show Send" : "Hide Send";
+            btnSendArea.Text = ablnHide ? "Show Options" : "Hide Options";
             btnFold.Text     = ablnHide ? "<" : ">";
-            mtipButtons.SetToolTip(btnFold, ablnHide ? "Show the Send area" : "Hide the Send area (Enter still sends)");
+            mtipButtons.SetToolTip(btnFold, ablnHide ? "Show the options (Send, Popup, Copy, Clear ...)" : "Hide the options (Enter still sends)");
         }
 
         // The collapse strip at the right edge of every compose box (Story 6846, Tony: "I still
@@ -546,7 +546,7 @@ namespace AgentDockStandalone {
             if (IsCard) strProblem = cPaneThemes.SetHideSendArea(mfrmPane.AbsorbedHwnd, blnHide);
             else { try { cDockSettings.SaveComposeSendHidden(blnHide); } catch (Exception ex) { strProblem = ex.Message; } }
             ApplySendArea(blnHide);
-            mactStatus((blnHide ? "Send area hidden. Enter still sends. Click < at the right edge to bring it back." : "Send area shown.")
+            mactStatus((blnHide ? "Options hidden. Enter still sends. Click < at the right edge, or Show Options, to bring them back." : "Options shown.")
                 + (strProblem == null ? "" : " Not remembered: " + strProblem));
             txtPrompt.Focus();
         }
@@ -1069,7 +1069,7 @@ namespace AgentDockStandalone {
             };
             // Hide Send / Show Send (Tony: "remembered options to hide the pane to the right for
             // each terminal"). Enter still sends with the Send area hidden.
-            HeaderButton(btnSendArea, "Hide Send", 74, "Hide or show the Send area at the right of this pane. Enter still sends. Remembered for this pane's place.");
+            HeaderButton(btnSendArea, "Hide Options", 86, "Hide or show the options at the right of this pane (Send, Popup, Copy, Clear). Enter still sends. Remembered for this pane's place.");
             btnSendArea.Click += delegate { ToggleSendArea(); };
 
             pnlHeader.Controls.Add(lblHeader);
