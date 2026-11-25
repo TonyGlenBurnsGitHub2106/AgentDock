@@ -257,23 +257,56 @@ namespace AgentDockStandalone {
         private static DateTime mdtMarkers = DateTime.MinValue;
         private static readonly Regex RX_DIGITS = new Regex(@"[0-9]+");
 
-        // The sessions of process aintPid, oldest first (remembered, see above).
+        // The sessions of process aintPid, the one written to last at the end (remembered, see
+        // above). Last written, not last made (Story 6849, Tony: "I had resumed on a pane, and that
+        // pane is not functioning in conversation mode"): a resumed session is an old folder, and
+        // the process's own fresh session from its start sits beside it, newer but empty. The
+        // session Copilot is using now is the one whose record it writes.
         private static List<string> SessionsOf(string astrDir, string astrStates, uint aintPid) {
             string strKey = astrStates + "|" + aintPid;
+            List<string> lst = null;
             lock (moCacheLock) {
                 List<string> lstHit;
                 DateTime dtAt;
                 if (mdicPidSessions.TryGetValue(strKey, out lstHit) && mdicPidSessionsAt.TryGetValue(strKey, out dtAt)
                     && (DateTime.UtcNow - dtAt).TotalMilliseconds < CNST_SESSION_CACHE_MS)
-                    return new List<string>(lstHit);
+                    lst = new List<string>(lstHit);
             }
-            List<string> lst = FindSessionsOf(astrDir, astrStates, aintPid);
-            lock (moCacheLock) {
-                if (mdicPidSessions.Count > 500) { mdicPidSessions.Clear(); mdicPidSessionsAt.Clear(); }
-                mdicPidSessions[strKey]   = new List<string>(lst);
-                mdicPidSessionsAt[strKey] = DateTime.UtcNow;
+            if (lst == null) {
+                lst = FindSessionsOf(astrDir, astrStates, aintPid);
+                lock (moCacheLock) {
+                    if (mdicPidSessions.Count > 500) { mdicPidSessions.Clear(); mdicPidSessionsAt.Clear(); }
+                    mdicPidSessions[strKey]   = new List<string>(lst);
+                    mdicPidSessionsAt[strKey] = DateTime.UtcNow;
+                }
             }
-            return lst;
+            return ByLastWrite(astrStates, lst);
+        }
+
+        // The sessions ordered by when their record was last written, oldest first.
+        private static List<string> ByLastWrite(string astrStates, List<string> alst) {
+            if (alst.Count < 2) return alst;
+            List<KeyValuePair<DateTime, string>> lstTimed = new List<KeyValuePair<DateTime, string>>();
+            foreach (string strSession in alst) lstTimed.Add(new KeyValuePair<DateTime, string>(LastWrite(astrStates, strSession), strSession));
+            // A stable sort: sessions written at the same moment keep their order.
+            List<string> lstOut = new List<string>();
+            while (lstTimed.Count > 0) {
+                int intOldest = 0;
+                for (int i = 1; i < lstTimed.Count; i++) if (lstTimed[i].Key < lstTimed[intOldest].Key) intOldest = i;
+                lstOut.Add(lstTimed[intOldest].Value);
+                lstTimed.RemoveAt(intOldest);
+            }
+            return lstOut;
+        }
+
+        private static DateTime LastWrite(string astrStates, string astrSession) {
+            try {
+                string strFile = EventsFile(astrStates, astrSession);
+                if (strFile != null) return File.GetLastWriteTimeUtc(strFile);
+                string strFolder = Path.Combine(astrStates, astrSession);
+                if (Directory.Exists(strFolder)) return Directory.GetLastWriteTimeUtc(strFolder);
+            } catch (Exception) { }
+            return DateTime.MinValue;
         }
 
         // Every session folder with a marker file carrying a pid (inuse.<pid>.lock and the like),

@@ -538,12 +538,70 @@ namespace AgentDockStandalone {
         private List<cHistoryEntry> Shown(List<cHistoryEntry> alst) {
             fAgentAbsorbedTerminal pane = mfncTarget();
             List<cHistoryEntry> lst = cClearMarks.After(pane == null ? IntPtr.Zero : pane.AbsorbedHwnd, alst);
-            if (!mblnNotesHidden) return lst;
+            if (!mblnNotesHidden) return WithPending(pane, alst, lst);
             List<cHistoryEntry> lstOut = new List<cHistoryEntry>();
             for (int i = 0; i < lst.Count; i++) {
                 bool blnNextIsAnswer = i + 1 < lst.Count && lst[i + 1].IsAnswer;
                 if (lst[i].IsAnswer && blnNextIsAnswer) continue;   // a working note: another answer follows
                 lstOut.Add(lst[i]);
+            }
+            return WithPending(pane, alst, lstOut);
+        }
+
+        // Prompts sent from this box that the agent has not written down yet (Story 6849, Tony:
+        // "As soon as I press enter, the message I sent should show in this output pane"). The
+        // conversation is read from the agent's own record, and the agent writes a prompt down only
+        // when it takes it up: at once when it is waiting, but a message typed while it works waits
+        // until it gets to it. So a sent prompt shows at the bottom at once and stays there until
+        // the record has it, then shows where the agent took it.
+        private sealed class cPending {
+            public IntPtr   Hwnd;
+            public string   Key;            // the text, its spaces evened out
+            public string   Text;
+            public int      SeenBefore;     // how many prompts with this text the record held when it was sent
+            public DateTime At;
+        }
+        private readonly List<cPending> mlstPending = new List<cPending>();
+        private const int CNST_PENDING_MINUTES = 30;
+
+        private static string PendingKey(string astrText) {
+            return System.Text.RegularExpressions.Regex.Replace(astrText ?? "", @"\s+", " ").Trim();
+        }
+
+        private static int PromptsLike(List<cHistoryEntry> alst, string astrKey) {
+            int n = 0;
+            if (alst == null) return 0;
+            foreach (cHistoryEntry e in alst) if (!e.IsAnswer && PendingKey(e.Text) == astrKey) n++;
+            return n;
+        }
+
+        private void AddPending(fAgentAbsorbedTerminal apane, string astrText) {
+            if (apane == null || !mblnLive) return;
+            string strText = (astrText ?? "").TrimEnd('\r', '\n');
+            if (strText.Trim().Length == 0 || strText.TrimStart().StartsWith("/")) return;   // a command is not a message
+            cPending p = new cPending();
+            p.Hwnd = apane.AbsorbedHwnd;
+            p.Text = strText;
+            p.Key  = PendingKey(strText);
+            p.At   = DateTime.Now;
+            p.SeenBefore = mfrmLivePane == apane ? PromptsLike(mlstLiveRaw, p.Key) : 0;
+            mlstPending.Add(p);
+            if (mfncTarget() == apane && mlstLiveRaw != null) vwLive.SetEntries(Shown(mlstLiveRaw), true);
+        }
+
+        private List<cHistoryEntry> WithPending(fAgentAbsorbedTerminal apane, List<cHistoryEntry> alstRaw, List<cHistoryEntry> alstShown) {
+            if (mlstPending.Count == 0 || apane == null) return alstShown;
+            List<cHistoryEntry> lstOut = alstShown;
+            for (int i = mlstPending.Count - 1; i >= 0; i--) {
+                cPending p = mlstPending[i];
+                if ((DateTime.Now - p.At).TotalMinutes > CNST_PENDING_MINUTES) { mlstPending.RemoveAt(i); continue; }
+                if (p.Hwnd != apane.AbsorbedHwnd) continue;
+                if (PromptsLike(alstRaw, p.Key) > p.SeenBefore) mlstPending.RemoveAt(i);   // the record has it now
+            }
+            foreach (cPending p in mlstPending) {
+                if (p.Hwnd != apane.AbsorbedHwnd) continue;
+                if (lstOut == alstShown) lstOut = new List<cHistoryEntry>(alstShown);
+                lstOut.Add(new cHistoryEntry(p.Text, false));
             }
             return lstOut;
         }
@@ -1014,6 +1072,7 @@ namespace AgentDockStandalone {
                 Remember(strText);
                 txtPrompt.Clear();
                 mdtSent = DateTime.Now;
+                AddPending(pane, strText);
                 mactStatus("Sent to " + pane.Text + ".");
             };
             t.Start();
@@ -1034,6 +1093,7 @@ namespace AgentDockStandalone {
                 string strEnter = cConsoleInput.PressEnter(hwnd);
                 mactStatus(strEnter == null ? "Resent to " + apane.Text + "."
                     : "The text was typed, but Enter did not reach the pane: " + strEnter);
+                if (strEnter == null) AddPending(apane, astrText);
             };
             t.Start();
             Remember(astrText);

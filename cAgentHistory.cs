@@ -234,11 +234,36 @@ namespace AgentDockStandalone {
                 if (strSession == null) return cCopilotHistory.AgentState(alstPids);   // Copilot, or no agent
                 string strFile = TranscriptFile(strDir, strSession);
                 if (strFile == null) return 0;      // a new session, nothing asked yet
-                List<string> lstLines = new List<string>(ReadTailLines(strFile, CNST_STATE_TAIL_BYTES));
+                // Claude Code now and then writes a megabyte or more of its own bookkeeping (copies
+                // of the request it sent, "api-request-blob" lines) after the last message. Read
+                // further back until a message decides it (Story 6849, Tony: "the status shows as
+                // idle. I am sure you are thinking"), and never call it idle for want of a message.
+                long lngLength = new FileInfo(strFile).Length;
+                foreach (int intTail in new int[] { CNST_STATE_TAIL_BYTES, 8 * 1024 * 1024, 64 * 1024 * 1024 }) {
+                    int intState = StateFromLines(new List<string>(ReadTailLines(strFile, intTail)));
+                    if (intState != CNST_UNDECIDED) return intState;
+                    if (lngLength <= intTail) return 0;      // the whole session read: nothing asked yet
+                }
+                return -1;
+            } catch (Exception) {
+                return -1;
+            }
+        }
+
+        private const int CNST_UNDECIDED = -2;
+
+        // The state from a transcript's last lines (oldest first), or CNST_UNDECIDED when none
+        // of them is a message that decides it.
+        private static int StateFromLines(List<string> lstLines) {
+            {
                 JavaScriptSerializer js = new JavaScriptSerializer();
                 js.MaxJsonLength = Int32.MaxValue;
                 for (int i = lstLines.Count - 1; i >= 0; i--) {
                     string strLine = lstLines[i];
+                    // Bookkeeping lines can be large and mention "assistant" in the request they
+                    // copy: skip them without reading them as JSON.
+                    if (strLine.StartsWith("{\"type\":\"api-", StringComparison.Ordinal)
+                        || strLine.StartsWith("{\"type\":\"data-flow", StringComparison.Ordinal)) continue;
                     bool blnAssistant = strLine.IndexOf("\"assistant\"", StringComparison.Ordinal) >= 0;
                     bool blnUser      = strLine.IndexOf("\"user\"", StringComparison.Ordinal) >= 0;
                     if (!blnAssistant && !blnUser) continue;
@@ -267,9 +292,7 @@ namespace AgentDockStandalone {
                     }
                     return 1;                                       // your prompt, not yet answered
                 }
-                return 0;
-            } catch (Exception) {
-                return -1;
+                return CNST_UNDECIDED;
             }
         }
 

@@ -198,6 +198,13 @@ to the end).
 - **Settings -> Hide Working Notes** (also in the Palette) hides the notes the agent writes while it
   works ("Looking at the log now", "Building..."): of a run of agent messages, only the last one
   shows. Untick it to see them all again. It is for every pane, and the dock remembers it.
+- **What you send shows at once** at the bottom of the conversation, before the agent has taken
+  it up. The conversation is read from the agent's own record, and an agent writes a message typed
+  while it works into its record only when it gets to it. Then the message moves to where the
+  agent took it. Commands such as `/model` are not echoed.
+- **A resumed session** (`/resume`, or starting the agent with `--resume`) shows its whole
+  conversation. For GitHub Copilot CLI the dock follows the session Copilot is writing to, which
+  can take up to ten seconds after a resume.
 - **Messages you type while the agent is working** (Claude Code keeps them apart from ordinary
   prompts) show in the conversation as your prompts, where the agent received them.
 - **How it looks** is four choices: **Colors** (44 themes, from Windows, the plain look, through
