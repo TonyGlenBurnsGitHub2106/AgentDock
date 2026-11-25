@@ -81,7 +81,8 @@ namespace AgentDockStandalone {
             mCompose.Height = cDockSettings.ComposeBoxHeight;
             this.Controls.Add(mCompose);
             // Run conversation grows the box (Story 6845): the panes make room.
-            mCompose.SizeChanged += delegate { if (mPanes != null && mCompose.Visible) mPanes.ReTile(); };
+            mCompose.SizeChanged += delegate { if (mPanes != null && mCompose.Visible && !mCompose.IsFullScreen) mPanes.ReTile(); };
+            mCompose.FullScreenChanged += new Action<bool>(SetComposeFullScreen);
 
             // The bar between the panes and the compose box: drag it up for a taller box and
             // smaller panes, down for the other way. The height is remembered (ComposeBoxHeight).
@@ -97,7 +98,7 @@ namespace AgentDockStandalone {
                 try { cDockSettings.SaveComposeBoxHeight(mCompose.Height); } catch { /* not remembered, no harm */ }
             };
             this.Controls.Add(msplCompose);
-            mCompose.VisibleChanged += delegate { msplCompose.Visible = mCompose.Visible; };
+            mCompose.VisibleChanged += delegate { msplCompose.Visible = mCompose.Visible && !mCompose.IsFullScreen; };
 
             // Docking runs from the back of the z-order to the front: the menu and status bar stay
             // outermost, then the compose box, its bar, and the pane area fills what is left.
@@ -837,6 +838,30 @@ namespace AgentDockStandalone {
         }
 
         private ToolStripMenuItem mnuShowCompose;
+
+        // Full Screen in the compose box (Story 6845): the pane area and its bar hide and the
+        // box fills the dock. The terminals keep running, hidden, and Send still reaches them.
+        // Released, the box goes back to its height and the panes are tiled again.
+        private int mintComposeHeightBeforeFull = -1;
+
+        private void SetComposeFullScreen(bool ablnFull) {
+            MdiClient mdi = null;
+            foreach (Control c in this.Controls) { if (c is MdiClient) mdi = (MdiClient)c; }
+            this.SuspendLayout();
+            if (ablnFull) {
+                mintComposeHeightBeforeFull = mCompose.Height;
+                if (mdi != null) mdi.Visible = false;
+                msplCompose.Visible = false;
+                mCompose.Dock = DockStyle.Fill;
+            } else {
+                mCompose.Dock = DockStyle.Bottom;
+                if (mintComposeHeightBeforeFull > 0) mCompose.Height = mintComposeHeightBeforeFull;
+                msplCompose.Visible = mCompose.Visible;
+                if (mdi != null) mdi.Visible = true;
+            }
+            this.ResumeLayout(true);
+            if (!ablnFull && mPanes != null) mPanes.ReTile();
+        }
 
         // Settings -> Compose Box Theme (Story 6845): every theme, the current one ticked.
         // Picking one paints the box at once and is remembered (agentdock.ini ComposeTheme).

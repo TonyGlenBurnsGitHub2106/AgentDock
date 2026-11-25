@@ -58,20 +58,25 @@ namespace AgentDockStandalone {
         // A line shown in the middle when there is nothing to show ("Pick a pane ...").
         public void SetMessage(string astrMessage) {
             mstrMessage = astrMessage ?? "";
-            if (mlstEntries.Count > 0) { mlstEntries = new List<cHistoryEntry>(); Relayout(true); }
+            if (mlstEntries.Count > 0) { mlstEntries = new List<cHistoryEntry>(); mblnPinned = true; Relayout(); }
             Invalidate();
         }
 
-        // The conversation, oldest first. The view stays at the bottom when it was there (or
-        // when ablnToBottom), so new messages come into sight. Scrolled up, it stays put.
+        // The conversation, oldest first, read from the bottom up (Tony, 2026-11-25: "It should
+        // be ascending"): the view opens at the newest message, at the bottom, and older ones are
+        // above it. It stays pinned to the newest while new messages come in, until you scroll up
+        // to read; scrolling back to the bottom pins it again. ablnToBottom (a new pane) pins it.
         public void SetEntries(List<cHistoryEntry> alstEntries, bool ablnToBottom) {
             List<cHistoryEntry> lst = alstEntries ?? new List<cHistoryEntry>();
+            if (ablnToBottom) mblnPinned = true;
             if (!ablnToBottom && SameAs(lst)) return;
-            bool blnAtBottom = ablnToBottom || IsAtBottom();
             mlstEntries = lst;
             mstrMessage = lst.Count == 0 ? "No conversation yet." : "";
-            Relayout(blnAtBottom);
+            Relayout();
         }
+
+        // True while the view follows the newest message (see SetEntries).
+        private bool mblnPinned = true;
 
         private bool SameAs(List<cHistoryEntry> alst) {
             if (alst.Count != mlstEntries.Count) return false;
@@ -85,17 +90,45 @@ namespace AgentDockStandalone {
             return intMax <= 0 || -this.AutoScrollPosition.Y >= intMax - 6;
         }
 
+        // To the newest message. Done again once the window has laid itself out, because a
+        // scroll set while the view is still being sized (the dock starting, the box growing)
+        // is lost: that left the view sitting on the oldest messages (1.0.35).
         public void ScrollToBottom() {
-            this.AutoScrollPosition = new Point(0, Math.Max(0, this.AutoScrollMinSize.Height));
+            mblnPinned = true;
+            ScrollNow();
+            if (this.IsHandleCreated) this.BeginInvoke(new MethodInvoker(delegate { if (mblnPinned) ScrollNow(); }));
+        }
+
+        private void ScrollNow() {
+            int intMax = Math.Max(0, this.AutoScrollMinSize.Height - this.ClientSize.Height);
+            this.AutoScrollPosition = new Point(0, intMax);
+            Invalidate();
+        }
+
+        // Scrolling by hand decides whether the view keeps following the newest message.
+        protected override void OnScroll(ScrollEventArgs se) {
+            base.OnScroll(se);
+            mblnPinned = IsAtBottom();
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e) {
+            base.OnMouseWheel(e);
+            mblnPinned = IsAtBottom();
         }
 
         protected override void OnResize(EventArgs e) {
             base.OnResize(e);
-            if (this.ClientSize.Width != mintLaidOutWidth) Relayout(IsAtBottom());
+            if (this.ClientSize.Width != mintLaidOutWidth) Relayout();
+            else if (mblnPinned) ScrollNow();
+        }
+
+        protected override void OnVisibleChanged(EventArgs e) {
+            base.OnVisibleChanged(e);
+            if (this.Visible && mblnPinned) ScrollToBottom();
         }
 
         // Places every bubble for the current width.
-        private void Relayout(bool ablnToBottom) {
+        private void Relayout() {
             mlstBubbles.Clear();
             mHover = null;
             int intWidth = Math.Max(120, this.ClientSize.Width);
@@ -124,7 +157,7 @@ namespace AgentDockStandalone {
                 mlstBubbles.Add(b);
             }
             this.AutoScrollMinSize = new Size(0, mlstBubbles.Count == 0 ? 0 : y);
-            if (ablnToBottom) ScrollToBottom();
+            if (mblnPinned) ScrollToBottom();
             Invalidate();
         }
 

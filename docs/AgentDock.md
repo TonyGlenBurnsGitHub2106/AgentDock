@@ -161,7 +161,9 @@ to the end).
   the top of the text, so a long answer does not need an Up for every line before the next step.
   Conversation and answers come from Claude Code's or GitHub Copilot CLI's record of the session.
 - **Run conversation**, the last choice in that list, shows the conversation of the pane in Send
-  to above the text, as chat bubbles, newest at the bottom. Your prompts sit at the right in
+  to above the text, as chat bubbles. It reads from the bottom up: it opens at the newest message,
+  at the bottom, with older ones above it, and follows each new message as it arrives. Scroll up
+  to read older ones and it stays where you are; scroll back to the bottom and it follows again. Your prompts sit at the right in
   rounder bubbles, the agent's answers at the left in squarer ones, each kind in its own color and
   outlined. Only what was said shows: no thinking and no tool calls. It stays current while the
   agent works (it looks every second or two), and stays at the bottom unless you have scrolled up
@@ -169,6 +171,10 @@ to the end).
   in the answer window (select, edit, Copy). Drag the bar between the conversation and the text to
   give either more room. The box grows to make room when Run conversation is picked, and goes back
   to its height when you pick another choice. While it is on, Up steps through your prompts.
+- **Full Screen**, under Send, hides the panes and lets the compose box fill the dock, so with Run
+  conversation picked the conversation is all you see. The agents keep running behind it and Send
+  still reaches the pane in Send to (pick another pane there). Press Full Screen again to bring the
+  panes back. Hiding the compose box also brings them back.
 - **Settings -> Compose Box Theme** colors the compose box: Windows (the plain look, the default),
   Daylight, Dark, Midnight, Nord, Dracula, Solarized Light, Solarized Dark, Forest, Ocean, Sepia,
   Rose, Lavender, Slate, Amber Terminal, Green Terminal, Sunset and High Contrast. Each theme sets

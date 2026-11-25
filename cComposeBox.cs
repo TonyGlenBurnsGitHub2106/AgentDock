@@ -24,6 +24,8 @@ namespace AgentDockStandalone {
         private readonly Button  btnSend   = new Button();
         private readonly Button  btnAnswer = new Button();
         private readonly Button  btnCopy   = new Button();
+        // Full Screen (Story 6845): pressed, the panes hide and the compose box fills the dock.
+        private readonly CheckBox chkFull  = new CheckBox();
         private readonly ComboBox cboUpMode = new ComboBox();
         private readonly Label    lblTarget = new Label();
         private readonly ComboBox cboTarget = new ComboBox();
@@ -88,6 +90,27 @@ namespace AgentDockStandalone {
             btnCopy.Text   = "Copy";
             btnCopy.Dock   = DockStyle.Fill;
             btnCopy.Click += delegate { CopySelection(); };
+
+            // Full Screen (Story 6845): a toggle that stays pressed while the panes are hidden.
+            chkFull.Text       = "Full Screen";
+            chkFull.Appearance = Appearance.Button;
+            chkFull.TextAlign  = ContentAlignment.MiddleCenter;
+            chkFull.Dock       = DockStyle.Fill;
+            chkFull.Margin     = new Padding(0);
+            chkFull.CheckedChanged += delegate {
+                if (FullScreenChanged != null) FullScreenChanged(chkFull.Checked);
+                mactStatus(chkFull.Checked
+                    ? "Full screen: the panes are hidden and keep running. Press Full Screen again to bring them back."
+                    : "The panes are back.");
+                txtPrompt.Focus();
+            };
+
+            // Its own row under the buttons, so the row stays readable when the Send area is narrow.
+            Panel pnlFull = new Panel();
+            pnlFull.Dock    = DockStyle.Top;
+            pnlFull.Height  = 30;
+            pnlFull.Padding = new Padding(0, 3, 0, 0);
+            pnlFull.Controls.Add(chkFull);
 
             // Send, Popup Answer and Copy share the top row, whatever the width.
             TableLayoutPanel tblButtons = new TableLayoutPanel();
@@ -156,6 +179,7 @@ namespace AgentDockStandalone {
 
             pnlRight.Controls.Add(cboTarget);
             pnlRight.Controls.Add(pnlLabelRow);
+            pnlRight.Controls.Add(pnlFull);
             pnlRight.Controls.Add(tblButtons);
 
             txtPrompt.Multiline     = true;
@@ -214,7 +238,23 @@ namespace AgentDockStandalone {
         }
 
         // Shows or hides the box. Hidden, it does nothing at all.
+        // Raised when Full Screen is pressed or released: the dock hides or shows the panes.
+        public event Action<bool> FullScreenChanged;
+
+        public bool IsFullScreen { get { return chkFull.Checked; } }
+
+        // Releases Full Screen (the box being hidden, for one), which brings the panes back.
+        public void LeaveFullScreen() {
+            if (chkFull.Checked) chkFull.Checked = false;
+        }
+
+        // Whether the box is switched on. Visible alone cannot say: it is false while the dock
+        // itself is not on screen yet, and Run conversation then never started (1.0.35).
+        private bool mblnShown;
+
         public void SetShown(bool ablnShow) {
+            if (!ablnShow) LeaveFullScreen();
+            mblnShown    = ablnShow;
             this.Visible = ablnShow;
             if (ablnShow) { ShowTarget(); tmrTarget.Start(); }
             else tmrTarget.Stop();
@@ -239,7 +279,7 @@ namespace AgentDockStandalone {
 
         // Shows or hides the conversation to match the list and whether the box is shown.
         private void ApplyLive() {
-            bool blnLive = this.Visible && UpMode() == eUpMode.Live;
+            bool blnLive = mblnShown && UpMode() == eUpMode.Live;
             if (blnLive == mblnLive) return;
             mblnLive = blnLive;
             pnlLeft.SuspendLayout();
@@ -367,6 +407,19 @@ namespace AgentDockStandalone {
                     b.BackColor = aTheme.ButtonBack;
                     b.ForeColor = aTheme.ButtonFore;
                 }
+            }
+            if (blnSys) {
+                chkFull.FlatStyle = FlatStyle.Standard;
+                chkFull.BackColor = SystemColors.Control;
+                chkFull.ForeColor = SystemColors.ControlText;
+                chkFull.UseVisualStyleBackColor = true;
+            } else {
+                chkFull.FlatStyle = FlatStyle.Flat;
+                chkFull.FlatAppearance.BorderColor = aTheme.Border;
+                chkFull.FlatAppearance.CheckedBackColor   = Blend(aTheme.ButtonBack, aTheme.PromptEdge, 0.55);
+                chkFull.FlatAppearance.MouseOverBackColor = Blend(aTheme.ButtonBack, aTheme.ButtonFore, 0.15);
+                chkFull.BackColor = aTheme.ButtonBack;
+                chkFull.ForeColor = aTheme.ButtonFore;
             }
             foreach (ComboBox c in new ComboBox[] { cboUpMode, cboTarget }) {
                 c.FlatStyle = blnSys ? FlatStyle.Standard : FlatStyle.Flat;
