@@ -442,6 +442,8 @@ namespace AgentDockStandalone {
                 }
                 List<cHistoryEntry> lst = null;
                 try { lst = cAgentHistory.ConversationForPids(lstFor, CNST_CONVERSATION_MAX); } catch (Exception) { lst = null; }
+                bool blnNewSession = false;
+                if (lst == null) { try { blnNewSession = cAgentHistory.HasSession(lstFor); } catch (Exception) { } }
                 try {
                     // No window yet (a conversation pane read before it was placed): never leave
                     // the load marked running, or the view would wait for it forever (1.0.40).
@@ -454,8 +456,13 @@ namespace AgentDockStandalone {
                         mfrmLivePane  = pane;
                         mstrLiveStamp = strStamp;
                         mlstLiveRaw   = lst;
-                        if (lst == null) vwLive.SetMessage("No conversation found for " + strPaneName
-                            + ". The dock reads Claude Code and GitHub Copilot CLI.");
+                        // A new session has nothing to show until its first message (Story 6850,
+                        // Tony saw "No conversation found" on every pane he spawned). The pane's
+                        // name is left out: right after a spawn it is still the startup command.
+                        if (lst == null && blnNewSession)
+                            vwLive.SetMessage("New session. Nothing has been said yet.\r\nWrite below and the conversation shows here.");
+                        else if (lst == null) vwLive.SetMessage("No conversation yet for " + strPaneName
+                            + ".\r\nIt shows here once Claude Code or GitHub Copilot CLI has started in this pane.");
                         else vwLive.SetEntries(Shown(lst), blnNewPane);
                     }));
                 } catch (Exception) {

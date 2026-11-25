@@ -49,6 +49,17 @@ namespace AgentDockStandalone {
             }
         }
 
+        // Whether one of these processes is a Claude Code or Copilot session, even one where nothing
+        // has been said yet (Story 6850). Claude Code writes no transcript before the first message,
+        // so a new pane has a session but no conversation.
+        public static bool HasSession(List<uint> alstPids) {
+            try {
+                string strDir = ClaudeDir();
+                if (strDir != null && ClaudeSession(strDir, alstPids) != null) return true;
+            } catch (Exception) { }
+            return cCopilotHistory.Stamp(alstPids) != null;
+        }
+
         // The session id of the Claude running as one of these processes, or null.
         private static string ClaudeSession(string astrDir, List<uint> alstPids) {
             foreach (uint intPid in alstPids) {

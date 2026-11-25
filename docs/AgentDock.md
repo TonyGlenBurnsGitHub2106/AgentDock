@@ -281,6 +281,9 @@ Cascade, Quadrant Layout, and Maximize / Restore Pane (the pane you last wrote i
 In Cascade the one you click in comes to the front. Writing in a conversation pane makes it the pane
 you last clicked, so **Agents -> Close Active Pane** and the rest act on it.
 
+A pane just opened says **New session** until something has been said in it: the agent keeps
+no record before the first message. Write in its box and the conversation appears.
+
 The terminals keep running, hidden. A pane opened or closed while conversation panes are on gets or
 loses its conversation pane within a second. The dock's own compose box is hidden meanwhile and comes
 back as it was when you turn conversation panes off. The dock remembers the setting.
