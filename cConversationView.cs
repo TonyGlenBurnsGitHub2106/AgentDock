@@ -10,9 +10,10 @@ namespace AgentDockStandalone {
     // bottom. Your prompts sit at the right in rounder bubbles, the agent's answers at the left in
     // squarer ones, each in its own theme colors and outlined. Only what was said is shown: no
     // thinking, no tool calls. A long one is cut short in its bubble. Right-clicking a bubble
-    // offers Popup (the whole text in the answer window, BubbleClicked) and Copy (Tony,
-    // 2026-11-25: "don't do the popup on click ... right click a message, then popup from a
-    // context menu, or copy"). A left click does nothing.
+    // offers Reply (the text quoted into the box, ReplyClicked, Story 6854), Popup (the whole
+    // text in the answer window, BubbleClicked) and Copy (Tony, 2026-11-25: "don't do the popup
+    // on click ... right click a message, then popup from a context menu, or copy"). A left
+    // click does nothing.
     internal sealed class cConversationView : Panel {
 
         private const int CNST_MARGIN        = 10;   // from the sides of the view
@@ -37,6 +38,7 @@ namespace AgentDockStandalone {
         private int    mintLaidOutWidth = -1;
 
         public event Action<cHistoryEntry> BubbleClicked;
+        public event Action<cHistoryEntry> ReplyClicked;   // Reply on the right-click menu (Story 6854)
 
         public cConversationView() {
             this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
@@ -521,7 +523,7 @@ namespace AgentDockStandalone {
             if (mHover != null) { mHover = null; Invalidate(); }
         }
 
-        // Right-click on a bubble: Popup or Copy.
+        // Right-click on a bubble: Reply, Popup or Copy.
         private ContextMenuStrip mMenu;
         private cHistoryEntry    mMenuEntry;
 
@@ -541,6 +543,11 @@ namespace AgentDockStandalone {
                 ToolStripMenuItem miCopy = new ToolStripMenuItem("&Copy");
                 miCopy.ToolTipText = "Copy the whole message.";
                 miCopy.Click += delegate { CopyEntry(mMenuEntry); };
+                // Reply (Story 6854): the message quoted into the box, ready for an answer to it.
+                ToolStripMenuItem miReply = new ToolStripMenuItem("&Reply");
+                miReply.ToolTipText = "Quote the whole message in the box below, then type your reply under it.";
+                miReply.Click += delegate { if (mMenuEntry != null && ReplyClicked != null) ReplyClicked(mMenuEntry); };
+                mMenu.Items.Add(miReply);
                 mMenu.Items.Add(miPopup);
                 mMenu.Items.Add(miCopy);
                 mMenu.Closed += delegate { mHover = null; Invalidate(); };

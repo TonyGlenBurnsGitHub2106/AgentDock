@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Text;
 using System.Windows.Forms;
 
 namespace AgentDockStandalone {
@@ -261,6 +262,7 @@ namespace AgentDockStandalone {
             vwLive.Dock    = DockStyle.Fill;
             vwLive.Visible = false;
             vwLive.BubbleClicked += new Action<cHistoryEntry>(OpenBubble);
+            vwLive.ReplyClicked  += new Action<cHistoryEntry>(ReplyToBubble);
             vwLive.Status        += delegate(string astr) { mactStatus(astr); };
             splPrompt.Dock      = DockStyle.Bottom;
             splPrompt.Height    = 5;
@@ -591,6 +593,34 @@ namespace AgentDockStandalone {
                 dlg.ShowDialog(this.FindForm());
             }
             txtPrompt.Focus();
+        }
+
+        // Reply on a bubble's right-click menu (Story 6854). Tony: "it should put the text, quoted,
+        // in the prompt pane, put one hard return and then leave it such that you can type a
+        // response. It should be very clear ... that I am quoting the AI and replying to what he
+        // said." So a line saying whose words they are, every line of them behind "> " (the
+        // usual mark for a quote, which every agent reads), then one line break, the cursor
+        // there. Whatever was already in the box stays above it.
+        private void ReplyToBubble(cHistoryEntry aEntry) {
+            if (aEntry == null) return;
+            string strBody = (aEntry.Text ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Trim('\n');
+            if (strBody.Trim().Length == 0) return;
+            StringBuilder sb = new StringBuilder();
+            sb.Append(aEntry.IsAnswer ? "Replying to this, from your earlier answer:" : "Coming back to this, from my earlier prompt:");
+            foreach (string strLine in strBody.Split('\n')) {
+                string s = strLine.TrimEnd();
+                sb.Append("\r\n").Append(s.Length == 0 ? ">" : "> " + s);
+            }
+            sb.Append("\r\n");
+            string strHad = txtPrompt.Text.TrimEnd();
+            mintHistoryAt = -1;
+            HideSlash();
+            txtPrompt.Text = strHad.Length == 0 ? sb.ToString() : strHad + "\r\n\r\n" + sb.ToString();
+            txtPrompt.SelectionStart  = txtPrompt.TextLength;
+            txtPrompt.SelectionLength = 0;
+            txtPrompt.Focus();
+            txtPrompt.ScrollToCaret();
+            mactStatus(aEntry.IsAnswer ? "Quoted the answer. Type your reply under it." : "Quoted your prompt. Type under it.");
         }
 
         // ------------------------------------------------------------ themes
