@@ -122,18 +122,38 @@ namespace AgentDockStandalone {
             for (int k = intTop + 1; k < intBottom; k++) lstInput.Add(aastrLines[k].Trim().Substring(1).Trim());
             r.Input = String.Join("\n", lstInput.ToArray()).Trim();
 
-            int intFirst = intTop;
-            while (intFirst > 0 && aastrLines[intFirst - 1].TrimStart().StartsWith(CNST_CP_SIDE.ToString(), StringComparison.Ordinal)) intFirst--;
-            for (int k = intFirst; k < intTop; k++) {
-                string s = aastrLines[k].TrimStart().Substring(1);
-                Match m = RX_CP_ROW.Match(s.TrimEnd());
-                if (!m.Success) continue;
+            // The rows, read upward from the box. Copilot draws them two ways (Rex, 2026-11-25): in a
+            // wide pane each starts with U+2503 and the last touches the box. In a narrow one (about
+            // 50 columns) they have no U+2503 and a blank line or two sits between them and the box.
+            // A U+2503 at the right edge is the scrollbar, so it is dropped too. The rows are one
+            // unbroken block: the first line above it that is not a row ends it.
+            List<Match> lstRows = new List<Match>();
+            int intBlanks = 0;
+            for (int k = intTop - 1; k >= 0; k--) {
+                string s = CopilotRowText(aastrLines[k]);
+                if (s.Length == 0) {
+                    if (lstRows.Count > 0 || ++intBlanks > 2) break;
+                    continue;
+                }
+                Match m = RX_CP_ROW.Match(s);
+                if (!m.Success) break;
+                lstRows.Insert(0, m);
+            }
+            foreach (Match m in lstRows) {
                 if (m.Groups[1].Success && m.Groups[1].Value.Length > 0) r.Selected = r.Rows.Count;
                 string strDesc = m.Groups[3].Success ? m.Groups[3].Value.Trim() : "";
                 if (strDesc.EndsWith("\u2026", StringComparison.Ordinal)) strDesc = strDesc.Substring(0, strDesc.Length - 1).TrimEnd() + "...";
                 r.Rows.Add(new cSlashCommand(m.Groups[2].Value.Substring(1), strDesc, null));
             }
             return r;
+        }
+
+        // A line with Copilot's side bar (left) and scrollbar (right) taken off, trimmed.
+        private static string CopilotRowText(string astrLine) {
+            string s = (astrLine ?? "").Trim();
+            if (s.Length > 0 && s[0] == CNST_CP_SIDE) s = s.Substring(1).Trim();
+            if (s.Length > 0 && (s[s.Length - 1] == CNST_CP_SIDE || s[s.Length - 1] == '\u2502')) s = s.Substring(0, s.Length - 1).Trim();
+            return s;
         }
 
         // The argument hint the agent shows after astrTyped, or "" (see the class comment).
